@@ -36,6 +36,13 @@ class RolesAndPermissionsSeeder extends Seeder
         'brands.manage',
         'units.view',
         'units.manage',
+        'inventory.view',
+        'inventory.adjust',
+        'inventory.opening',
+        'inventory.damage',
+        'inventory.loss',
+        'inventory.count',
+        'inventory.history',
     ];
 
     /**
@@ -76,6 +83,13 @@ class RolesAndPermissionsSeeder extends Seeder
                 'brands.manage',
                 'units.view',
                 'units.manage',
+                'inventory.view',
+                'inventory.adjust',
+                'inventory.opening',
+                'inventory.damage',
+                'inventory.loss',
+                'inventory.count',
+                'inventory.history',
             ],
             'manager' => [
                 'companies.view',
@@ -88,11 +102,19 @@ class RolesAndPermissionsSeeder extends Seeder
                 'categories.view',
                 'brands.view',
                 'units.view',
+                'inventory.view',
+                'inventory.adjust',
+                'inventory.opening',
+                'inventory.damage',
+                'inventory.loss',
+                'inventory.count',
+                'inventory.history',
             ],
             'cashier' => [
                 'branches.view',
                 'warehouses.view',
                 'products.view',
+                'inventory.view',
             ],
         ];
 

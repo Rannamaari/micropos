@@ -115,6 +115,21 @@ class Product extends Model
         return $this->hasOne(ProductBarcode::class)->where('is_primary', true);
     }
 
+    public function inventoryBalances(): HasMany
+    {
+        return $this->hasMany(InventoryBalance::class);
+    }
+
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
+    }
+
+    public function stockCountItems(): HasMany
+    {
+        return $this->hasMany(StockCountItem::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);

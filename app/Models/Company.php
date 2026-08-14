@@ -66,6 +66,21 @@ class Company extends Model
         return $this->hasMany(Product::class);
     }
 
+    public function inventoryBalances(): HasMany
+    {
+        return $this->hasMany(InventoryBalance::class);
+    }
+
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
+    }
+
+    public function stockCounts(): HasMany
+    {
+        return $this->hasMany(StockCount::class);
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
