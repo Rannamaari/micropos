@@ -52,4 +52,14 @@ class Branch extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    public function purchases(): HasMany
+    {
+        return $this->hasMany(Purchase::class);
+    }
+
+    public function sales(): HasMany
+    {
+        return $this->hasMany(Sale::class);
+    }
 }

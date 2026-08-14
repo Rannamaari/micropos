@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             UnitsSeeder::class,
             ProductCatalogDemoSeeder::class,
             DemoInventorySeeder::class,
+            DemoTradeSeeder::class,
         ]);
     }
 }

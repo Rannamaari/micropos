@@ -92,6 +92,42 @@ class InventoryService
         ));
     }
 
+    public function increaseWithReference(
+        string $companyId,
+        string $warehouseId,
+        string $productId,
+        float|string $quantity,
+        StockMovementType $type,
+        string $referenceType,
+        string $referenceId,
+        string $referenceNumber,
+        ?float $unitCost = null,
+        ?string $createdBy = null,
+        ?string $reason = null,
+        ?string $notes = null,
+        ?Carbon $occurredAt = null,
+    ): StockMovement {
+        $normalizedQuantity = $this->normalizePositiveQuantity($quantity, 'Increase quantity');
+        $product = $this->resolveProductAndWarehouse($companyId, $warehouseId, $productId)['product'];
+
+        return DB::transaction(fn (): StockMovement => $this->applyMovement(
+            $companyId,
+            $warehouseId,
+            $product,
+            $normalizedQuantity,
+            $type,
+            $unitCost,
+            $createdBy,
+            $occurredAt,
+            $reason,
+            $notes,
+            null,
+            $referenceType,
+            $referenceId,
+            $referenceNumber,
+        ));
+    }
+
     public function decrease(
         string $companyId,
         string $warehouseId,
@@ -118,6 +154,42 @@ class InventoryService
             $occurredAt,
             $reason,
             $notes
+        ));
+    }
+
+    public function decreaseWithReference(
+        string $companyId,
+        string $warehouseId,
+        string $productId,
+        float|string $quantity,
+        StockMovementType $type,
+        string $referenceType,
+        string $referenceId,
+        string $referenceNumber,
+        ?float $unitCost = null,
+        ?string $createdBy = null,
+        ?string $reason = null,
+        ?string $notes = null,
+        ?Carbon $occurredAt = null,
+    ): StockMovement {
+        $normalizedQuantity = $this->normalizePositiveQuantity($quantity, 'Decrease quantity');
+        $product = $this->resolveProductAndWarehouse($companyId, $warehouseId, $productId)['product'];
+
+        return DB::transaction(fn (): StockMovement => $this->applyMovement(
+            $companyId,
+            $warehouseId,
+            $product,
+            $this->formatDecimal(-$normalizedQuantity),
+            $type,
+            $unitCost,
+            $createdBy,
+            $occurredAt,
+            $reason,
+            $notes,
+            null,
+            $referenceType,
+            $referenceId,
+            $referenceNumber,
         ));
     }
 
