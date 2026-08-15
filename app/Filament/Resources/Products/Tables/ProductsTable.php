@@ -1,0 +1,84 @@
+<?php
+
+namespace App\Filament\Resources\Products\Tables;
+
+use App\Models\Product;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+
+class ProductsTable
+{
+    public static function configure(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('sku')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('name')
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $nested) use ($search): void {
+                            $nested->where('products.name', 'like', "%{$search}%")
+                                ->orWhere('products.sku', 'like', "%{$search}%")
+                                ->orWhereHas('barcodes', fn (Builder $barcodeQuery): Builder => $barcodeQuery->where('barcode', 'like', "%{$search}%"));
+                        });
+                    })
+                    ->sortable(),
+                TextColumn::make('primaryBarcode.barcode')
+                    ->label('Primary Barcode')
+                    ->toggleable(),
+                TextColumn::make('category.name')
+                    ->toggleable(),
+                TextColumn::make('brand.name')
+                    ->toggleable(),
+                TextColumn::make('unit.short_name')
+                    ->label('Unit'),
+                TextColumn::make('cost_price')
+                    ->money('MVR')
+                    ->sortable(),
+                TextColumn::make('selling_price')
+                    ->money('MVR')
+                    ->sortable(),
+                TextColumn::make('minimum_stock')
+                    ->sortable(),
+                IconColumn::make('track_inventory')
+                    ->boolean(),
+                IconColumn::make('is_active')
+                    ->boolean(),
+            ])
+            ->filters([
+                SelectFilter::make('category_id')
+                    ->relationship('category', 'name'),
+                SelectFilter::make('brand_id')
+                    ->relationship('brand', 'name'),
+                SelectFilter::make('track_inventory')
+                    ->options([
+                        1 => 'Tracked',
+                        0 => 'Not Tracked',
+                    ]),
+                SelectFilter::make('is_active')
+                    ->options([
+                        1 => 'Active',
+                        0 => 'Inactive',
+                    ]),
+            ])
+            ->recordActions([
+                ViewAction::make(),
+                EditAction::make(),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ])
+            ->defaultSort('name')
+            ->paginated([25, 50, 100]);
+    }
+}

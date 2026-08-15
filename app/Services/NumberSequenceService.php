@@ -12,6 +12,7 @@ class NumberSequenceService
         'sale' => 'SAL',
         'purchase_return' => 'PRN',
         'sale_return' => 'SRN',
+        'customer' => 'CUS',
     ];
 
     public function next(string $companyId, string $type): string

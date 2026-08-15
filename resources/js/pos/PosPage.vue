@@ -1,0 +1,153 @@
+<script setup>
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { usePosStore } from './stores/posStore';
+import PosHeader from './components/pos/PosHeader.vue';
+import ProductSearch from './components/pos/ProductSearch.vue';
+import ProductSearchResults from './components/pos/ProductSearchResults.vue';
+import Cart from './components/pos/Cart.vue';
+import CartSummary from './components/pos/CartSummary.vue';
+import CustomerSelector from './components/pos/CustomerSelector.vue';
+import PaymentModal from './components/pos/PaymentModal.vue';
+import HeldSalesModal from './components/pos/HeldSalesModal.vue';
+import SaleCompleteModal from './components/pos/SaleCompleteModal.vue';
+import SaleLookupModal from './components/pos/SaleLookupModal.vue';
+import ShortcutHelpModal from './components/pos/ShortcutHelpModal.vue';
+
+const props = defineProps({
+    bootstrap: {
+        type: Object,
+        required: true,
+    },
+});
+
+const store = usePosStore();
+const searchRef = ref(null);
+const searchDebounce = ref(null);
+
+store.hydrate(props.bootstrap);
+
+const canOpenPayment = computed(() => store.items.length > 0);
+
+function focusSearch() {
+    searchRef.value?.focusInput();
+}
+
+function onSearchInput(value) {
+    clearTimeout(searchDebounce.value);
+    searchDebounce.value = setTimeout(() => {
+        store.searchProducts(value);
+    }, 300);
+}
+
+function onGlobalKeydown(event) {
+    if (event.key === 'F2') {
+        event.preventDefault();
+        focusSearch();
+    }
+
+    if (event.key === 'F4') {
+        event.preventDefault();
+        store.customerModalOpen = true;
+    }
+
+    if (event.key === 'F6') {
+        event.preventDefault();
+        if (store.canHoldSale) {
+            store.holdSale();
+        }
+    }
+
+    if (event.key === 'F8') {
+        event.preventDefault();
+        if (canOpenPayment.value) {
+            store.paymentModalOpen = true;
+        }
+    }
+
+    if (event.key === 'Escape') {
+        store.paymentModalOpen = false;
+        store.customerModalOpen = false;
+        store.heldSalesModalOpen = false;
+        store.saleLookupModalOpen = false;
+        store.shortcutModalOpen = false;
+    }
+}
+
+function onBeforeUnload(event) {
+    if (! store.dirty) return;
+    event.preventDefault();
+    event.returnValue = '';
+}
+
+async function signOut() {
+    if (store.dirty && ! window.confirm('The current sale is not finished yet. Sign out anyway?')) {
+        return;
+    }
+
+    try {
+        await window.axios.post('/logout');
+        window.location.href = '/login';
+    } catch {
+        window.location.href = '/login';
+    }
+}
+
+watch(() => store.items.length, () => {
+    focusSearch();
+});
+
+onMounted(() => {
+    window.addEventListener('keydown', onGlobalKeydown);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    focusSearch();
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onGlobalKeydown);
+    window.removeEventListener('beforeunload', onBeforeUnload);
+});
+</script>
+
+<template>
+    <div class="pos-shell min-h-screen p-4 text-[var(--pos-paper)] md:p-6">
+        <div class="mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1800px] flex-col gap-4">
+            <PosHeader @shortcuts="store.shortcutModalOpen = true" @held-sales="store.heldSalesModalOpen = true; store.loadHeldSales()" @sale-lookup="store.prepareSalesHistory()" @sign-out="signOut" />
+
+            <div v-if="store.errors.length" class="pos-card rounded-[28px] border border-[var(--pos-danger)]/30 bg-[rgba(255,93,115,0.12)] p-4 text-sm text-rose-100">
+                <p class="mb-2 font-semibold uppercase tracking-[0.2em] text-rose-200">Attention</p>
+                <ul class="space-y-1">
+                    <li v-for="error in store.errors" :key="error">{{ error }}</li>
+                </ul>
+            </div>
+
+            <div class="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(420px,0.8fr)]">
+                <section class="pos-card flex min-h-[40rem] flex-col rounded-[32px] p-4 md:p-6">
+                    <ProductSearch ref="searchRef" v-model="store.searchInputValue" :disabled="store.loading.completingSale" @search-input="onSearchInput" @submit="store.scanOrLookup(store.searchInputValue)" />
+                    <ProductSearchResults
+                        :results="store.searchResults"
+                        :selected-index="store.selectedSearchIndex"
+                        @add="store.addProduct"
+                        @select-index="store.selectedSearchIndex = $event"
+                    />
+                </section>
+
+                <section class="pos-card flex min-h-[40rem] flex-col rounded-[32px] p-4 md:p-6">
+                    <Cart :is-resumed-sale="store.isResumedSale" @open-customer="store.customerModalOpen = true" />
+                    <CartSummary
+                        :can-open-payment="canOpenPayment"
+                        @hold="store.holdSale()"
+                        @payment="store.paymentModalOpen = true"
+                        @new-sale="store.resetSale()"
+                    />
+                </section>
+            </div>
+        </div>
+
+        <CustomerSelector v-if="store.customerModalOpen" @close="store.customerModalOpen = false; focusSearch()" />
+        <PaymentModal v-if="store.paymentModalOpen" @close="store.paymentModalOpen = false; focusSearch()" />
+        <HeldSalesModal v-if="store.heldSalesModalOpen" @close="store.heldSalesModalOpen = false; focusSearch()" />
+        <SaleCompleteModal v-if="store.saleCompleteModal" @close="store.saleCompleteModal = null; focusSearch()" />
+        <SaleLookupModal v-if="store.saleLookupModalOpen" @close="store.saleLookupModalOpen = false; focusSearch()" />
+        <ShortcutHelpModal v-if="store.shortcutModalOpen" @close="store.shortcutModalOpen = false; focusSearch()" />
+    </div>
+</template>

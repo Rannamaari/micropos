@@ -8,4 +8,85 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Sora', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+    --pos-ink: #101820;
+    --pos-panel: #172633;
+    --pos-panel-2: #203444;
+    --pos-line: #32556f;
+    --pos-paper: #f5f7f9;
+    --pos-muted: #9db6c9;
+    --pos-accent: #ff9f1c;
+    --pos-accent-strong: #ffbf69;
+    --pos-danger: #ff5d73;
+    --pos-success: #56d39b;
+}
+
+body {
+    font-family: var(--font-sans);
+}
+
+.pos-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--pos-line) transparent;
+}
+
+.pos-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.pos-scrollbar::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--pos-line) 75%, transparent);
+    border-radius: 999px;
+}
+
+.pos-shell {
+    background:
+        radial-gradient(circle at top left, rgba(255, 159, 28, 0.08), transparent 24rem),
+        radial-gradient(circle at bottom right, rgba(86, 211, 155, 0.08), transparent 22rem),
+        linear-gradient(160deg, #0e1b25 0%, #101820 42%, #0f202c 100%);
+}
+
+.pos-card {
+    background: linear-gradient(180deg, rgba(23, 38, 51, 0.98), rgba(19, 31, 42, 0.98));
+    border: 1px solid rgba(109, 152, 186, 0.18);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+}
+
+.pos-button {
+    @apply inline-flex items-center justify-center rounded-2xl px-4 py-3 font-semibold transition duration-150;
+}
+
+.pos-button-primary {
+    @apply inline-flex items-center justify-center rounded-2xl px-4 py-3 font-semibold transition duration-150;
+    background: linear-gradient(135deg, var(--pos-accent), var(--pos-accent-strong));
+    color: #201100;
+}
+
+.pos-button-secondary {
+    @apply inline-flex items-center justify-center rounded-2xl border px-4 py-3 font-semibold transition duration-150;
+    border-color: rgba(109, 152, 186, 0.24);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--pos-paper);
+}
+
+.pos-input {
+    @apply w-full rounded-2xl border px-4 py-3 outline-none transition;
+    border-color: rgba(109, 152, 186, 0.24);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--pos-paper);
+}
+
+.pos-input:focus {
+    border-color: rgba(255, 191, 105, 0.95);
+    box-shadow: 0 0 0 3px rgba(255, 191, 105, 0.14);
+}
+
+.pos-badge {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em];
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--pos-muted);
 }

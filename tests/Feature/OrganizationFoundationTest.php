@@ -209,4 +209,16 @@ class OrganizationFoundationTest extends TestCase
 
         $this->assertTrue($user->hasRole('super-admin'));
     }
+
+    #[Test]
+    public function seeded_admin_user_has_a_default_pos_assignment(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $user = User::query()->where('email', 'admin@micropos.local')->firstOrFail();
+        $warehouse = Warehouse::query()->where('company_id', $user->company_id)->where('code', 'MAIN-WH')->firstOrFail();
+
+        $this->assertSame($warehouse->id, $user->warehouse_id);
+        $this->assertNotNull($user->branch_id);
+    }
 }

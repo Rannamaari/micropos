@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Sale extends Model
 {
@@ -34,9 +35,13 @@ class Sale extends Model
         'paid_total',
         'balance_due',
         'notes',
+        'cancellation_reason',
+        'cancellation_notes',
         'created_by',
+        'cancelled_by',
         'completed_at',
         'voided_at',
+        'cancelled_at',
     ];
 
     /**
@@ -55,6 +60,7 @@ class Sale extends Model
             'balance_due' => 'decimal:4',
             'completed_at' => 'datetime',
             'voided_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -91,5 +97,15 @@ class Sale extends Model
     public function returns(): HasMany
     {
         return $this->hasMany(SaleReturn::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function canceller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 }

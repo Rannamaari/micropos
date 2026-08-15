@@ -57,9 +57,13 @@ class SaleFactory extends Factory
             'paid_total' => 100,
             'balance_due' => 0,
             'notes' => fake()->optional()->sentence(),
+            'cancellation_reason' => null,
+            'cancellation_notes' => null,
             'created_by' => null,
+            'cancelled_by' => null,
             'completed_at' => now(),
             'voided_at' => null,
+            'cancelled_at' => null,
         ];
     }
 }

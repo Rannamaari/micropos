@@ -4,6 +4,8 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +15,7 @@ use Illuminate\Notifications\Notifiable;
 use InvalidArgumentException;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, HasUuids, Notifiable;
@@ -117,5 +119,18 @@ class User extends Authenticatable
     public function createdSales(): HasMany
     {
         return $this->hasMany(Sale::class, 'created_by');
+    }
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        if (! $this->is_active) {
+            return false;
+        }
+
+        if ($panel->getId() !== 'admin') {
+            return true;
+        }
+
+        return $this->hasAnyRole(['super-admin', 'admin', 'manager']);
     }
 }

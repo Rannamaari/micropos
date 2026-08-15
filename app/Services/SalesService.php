@@ -18,6 +18,7 @@ use App\Models\Warehouse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class SalesService
 {
@@ -122,8 +123,8 @@ class SalesService
                 return $sale->load('items', 'payments');
             }
 
-            if ($sale->status === SaleStatus::Voided) {
-                throw new TransactionException('Voided sales cannot be completed.');
+            if (in_array($sale->status, [SaleStatus::Voided, SaleStatus::Cancelled], true)) {
+                throw new TransactionException('Cancelled sales cannot be completed.');
             }
 
             $customer = $this->resolveCustomer($sale->company_id, $sale->customer_id);
@@ -132,6 +133,151 @@ class SalesService
                 'created_by' => $completedBy,
                 'completed_at' => now(),
             ]);
+
+            return $sale->fresh('items', 'payments');
+        });
+    }
+
+    public function updateHeldSale(
+        string $saleId,
+        string $companyId,
+        string $branchId,
+        string $warehouseId,
+        array $items,
+        array $attributes = [],
+    ): Sale {
+        return DB::transaction(function () use ($saleId, $companyId, $branchId, $warehouseId, $items, $attributes): Sale {
+            $sale = Sale::query()
+                ->lockForUpdate()
+                ->with('payments')
+                ->where('company_id', $companyId)
+                ->findOrFail($saleId);
+
+            if ($sale->status !== SaleStatus::Held) {
+                throw new TransactionException('Only held sales can be updated.');
+            }
+
+            if ($sale->payments->isNotEmpty()) {
+                throw new TransactionException('Held sales cannot contain payments.');
+            }
+
+            $warehouse = $this->resolveWarehouse($companyId, $branchId, $warehouseId);
+            $customer = $this->resolveCustomer($companyId, $attributes['customer_id'] ?? null);
+            $lineItems = $this->prepareSaleItems($companyId, $items);
+            $totals = $this->calculateTotals(
+                $lineItems->sum('line_subtotal'),
+                $lineItems->sum('discount_amount'),
+                $lineItems->sum('tax_amount'),
+            );
+
+            $sale->items()->delete();
+
+            $attributesToUpdate = [
+                'branch_id' => $branchId,
+                'warehouse_id' => $warehouse->id,
+                'customer_id' => $customer?->id,
+                'subtotal' => $totals['subtotal'],
+                'discount_total' => $totals['discount_total'],
+                'tax_total' => $totals['tax_total'],
+                'grand_total' => $totals['grand_total'],
+                'paid_total' => $this->formatDecimal(0),
+                'balance_due' => $totals['grand_total'],
+                'notes' => $attributes['notes'] ?? null,
+                'completed_at' => null,
+            ];
+
+            if ($this->supportsHeldSaleCancellationAudit()) {
+                $attributesToUpdate += [
+                    'cancelled_at' => null,
+                    'cancelled_by' => null,
+                    'cancellation_reason' => null,
+                    'cancellation_notes' => null,
+                ];
+            }
+
+            $sale->forceFill($attributesToUpdate)->save();
+
+            foreach ($lineItems as $lineItem) {
+                SaleItem::query()->create([
+                    'sale_id' => $sale->id,
+                    'company_id' => $companyId,
+                    'product_id' => $lineItem['product']->id,
+                    'description' => $lineItem['description'],
+                    'quantity' => $lineItem['quantity'],
+                    'unit_price' => $lineItem['unit_price'],
+                    'unit_cost' => $lineItem['unit_cost'],
+                    'discount_amount' => $lineItem['discount_amount'],
+                    'tax_rate' => $lineItem['tax_rate'],
+                    'tax_amount' => $lineItem['tax_amount'],
+                    'line_total' => $lineItem['line_total'],
+                ]);
+            }
+
+            return $sale->fresh('items', 'payments');
+        });
+    }
+
+    public function completeHeldSale(
+        string $saleId,
+        string $companyId,
+        string $branchId,
+        string $warehouseId,
+        array $items,
+        array $payments = [],
+        array $attributes = [],
+    ): Sale {
+        return DB::transaction(function () use ($saleId, $companyId, $branchId, $warehouseId, $items, $payments, $attributes): Sale {
+            $sale = $this->updateHeldSale($saleId, $companyId, $branchId, $warehouseId, $items, $attributes);
+            $sale->refresh();
+            $sale->load('items');
+
+            $customer = $this->resolveCustomer($companyId, $sale->customer_id);
+
+            $this->finalizeSale($sale, $payments, $customer, [
+                'created_by' => $attributes['created_by'] ?? null,
+                'completed_at' => $attributes['completed_at'] ?? now(),
+            ]);
+
+            return $sale->fresh('items', 'payments');
+        });
+    }
+
+    public function cancelHeldSale(
+        string $saleId,
+        string $companyId,
+        string $reason,
+        ?string $notes = null,
+        ?string $cancelledBy = null,
+    ): Sale {
+        return DB::transaction(function () use ($saleId, $companyId, $reason, $notes, $cancelledBy): Sale {
+            $sale = Sale::query()
+                ->lockForUpdate()
+                ->where('company_id', $companyId)
+                ->findOrFail($saleId);
+
+            if ($sale->status !== SaleStatus::Held) {
+                throw new TransactionException('Only held sales can be cancelled.');
+            }
+
+            $attributesToUpdate = [
+                'status' => SaleStatus::Cancelled,
+            ];
+
+            if ($this->supportsHeldSaleCancellationAudit()) {
+                $attributesToUpdate += [
+                    'cancelled_at' => now(),
+                    'cancelled_by' => $cancelledBy,
+                    'cancellation_reason' => $reason,
+                    'cancellation_notes' => $notes,
+                ];
+            } else {
+                $attributesToUpdate['notes'] = trim(implode("\n\n", array_filter([
+                    $sale->notes,
+                    sprintf('Cancelled held sale: %s%s', $reason, $notes ? " - {$notes}" : ''),
+                ])));
+            }
+
+            $sale->forceFill($attributesToUpdate)->save();
 
             return $sale->fresh('items', 'payments');
         });
@@ -512,5 +658,21 @@ class SalesService
     private function formatDecimal(float|string|int $value): string
     {
         return number_format((float) $value, 4, '.', '');
+    }
+
+    private function supportsHeldSaleCancellationAudit(): bool
+    {
+        static $supportsAuditColumns;
+
+        if ($supportsAuditColumns === null) {
+            $supportsAuditColumns = Schema::hasColumns('sales', [
+                'cancelled_at',
+                'cancelled_by',
+                'cancellation_reason',
+                'cancellation_notes',
+            ]);
+        }
+
+        return $supportsAuditColumns;
     }
 }

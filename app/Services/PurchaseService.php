@@ -110,6 +110,99 @@ class PurchaseService
         });
     }
 
+    public function updatePurchase(
+        string $purchaseId,
+        string $companyId,
+        string $warehouseId,
+        string $supplierId,
+        array $items,
+        array $attributes = [],
+    ): Purchase {
+        return DB::transaction(function () use ($purchaseId, $companyId, $warehouseId, $supplierId, $items, $attributes): Purchase {
+            $purchase = Purchase::query()
+                ->lockForUpdate()
+                ->with(['items', 'payments'])
+                ->where('company_id', $companyId)
+                ->findOrFail($purchaseId);
+
+            if (! in_array($purchase->status, [PurchaseStatus::Draft, PurchaseStatus::Ordered], true)) {
+                throw new TransactionException('Only draft or ordered purchases can be edited.');
+            }
+
+            if ($purchase->payments->isNotEmpty()) {
+                throw new TransactionException('Purchases with payments cannot be edited.');
+            }
+
+            if ($purchase->items->contains(fn (PurchaseItem $item): bool => (float) $item->received_quantity > 0.0001)) {
+                throw new TransactionException('Received purchases cannot be edited.');
+            }
+
+            $warehouse = $this->resolveWarehouse($companyId, $warehouseId);
+            $supplier = $this->resolveSupplier($companyId, $supplierId);
+            $branch = $this->resolveBranch($companyId, $attributes['branch_id'] ?? null, $warehouse);
+            $status = $attributes['status'] ?? $purchase->status;
+
+            if (! $status instanceof PurchaseStatus) {
+                $status = PurchaseStatus::from($status);
+            }
+
+            if ($items === []) {
+                throw new TransactionException('At least one purchase item is required.');
+            }
+
+            $lineItems = $this->preparePurchaseItems($companyId, $items);
+            $totals = $this->calculateTotals(
+                $lineItems->sum('line_subtotal'),
+                $lineItems->sum('discount_amount'),
+                $lineItems->sum('tax_amount'),
+                $attributes['shipping_total'] ?? 0,
+                $attributes['other_cost_total'] ?? 0,
+            );
+
+            $this->resetPurchaseLedger($purchase);
+            $purchase->items()->delete();
+
+            $purchase->forceFill([
+                'branch_id' => $branch?->id,
+                'warehouse_id' => $warehouse->id,
+                'supplier_id' => $supplier->id,
+                'supplier_invoice_number' => $attributes['supplier_invoice_number'] ?? null,
+                'status' => $status,
+                'purchase_date' => $attributes['purchase_date'] ?? now()->toDateString(),
+                'expected_date' => $attributes['expected_date'] ?? null,
+                'subtotal' => $totals['subtotal'],
+                'discount_total' => $totals['discount_total'],
+                'tax_total' => $totals['tax_total'],
+                'shipping_total' => $totals['shipping_total'],
+                'other_cost_total' => $totals['other_cost_total'],
+                'grand_total' => $totals['grand_total'],
+                'paid_total' => $this->formatDecimal(0),
+                'balance_due' => $totals['grand_total'],
+                'notes' => $attributes['notes'] ?? null,
+            ])->save();
+
+            foreach ($lineItems as $lineItem) {
+                PurchaseItem::query()->create([
+                    'purchase_id' => $purchase->id,
+                    'company_id' => $companyId,
+                    'product_id' => $lineItem['product']->id,
+                    'description' => $lineItem['description'],
+                    'ordered_quantity' => $lineItem['ordered_quantity'],
+                    'received_quantity' => $this->formatDecimal(0),
+                    'unit_cost' => $lineItem['unit_cost'],
+                    'discount_amount' => $lineItem['discount_amount'],
+                    'tax_rate' => $lineItem['tax_rate'],
+                    'tax_amount' => $lineItem['tax_amount'],
+                    'line_total' => $lineItem['line_total'],
+                ]);
+            }
+
+            $this->recordPurchaseLedgerIfRecognized($purchase, $status, $attributes['created_by'] ?? null);
+
+            return $purchase->fresh(['items.product', 'supplier', 'warehouse', 'payments']);
+        });
+    }
+
     public function receivePurchase(
         string $purchaseId,
         array $receivedQuantities,
@@ -237,6 +330,41 @@ class PurchaseService
             ]);
 
             return $payment;
+        });
+    }
+
+    public function cancelPurchase(string $purchaseId, ?string $cancelledBy = null, ?string $notes = null): Purchase
+    {
+        return DB::transaction(function () use ($purchaseId, $cancelledBy, $notes): Purchase {
+            $purchase = Purchase::query()
+                ->lockForUpdate()
+                ->with(['items', 'payments'])
+                ->findOrFail($purchaseId);
+
+            if ($purchase->status === PurchaseStatus::Cancelled) {
+                return $purchase->fresh(['items', 'payments']);
+            }
+
+            if (! in_array($purchase->status, [PurchaseStatus::Draft, PurchaseStatus::Ordered], true)) {
+                throw new TransactionException('Only draft or ordered purchases can be cancelled.');
+            }
+
+            if ($purchase->payments->isNotEmpty()) {
+                throw new TransactionException('Purchases with recorded payments cannot be cancelled.');
+            }
+
+            if ($purchase->items->contains(fn (PurchaseItem $item): bool => (float) $item->received_quantity > 0.0001)) {
+                throw new TransactionException('Received purchases cannot be cancelled. Use purchase returns for received items.');
+            }
+
+            $this->resetPurchaseLedger($purchase);
+
+            $purchase->forceFill([
+                'status' => PurchaseStatus::Cancelled,
+                'notes' => trim(implode("\n\n", array_filter([$purchase->notes, $notes]))),
+            ])->save();
+
+            return $purchase->fresh(['items', 'payments']);
         });
     }
 
@@ -478,5 +606,29 @@ class PurchaseService
     private function formatDecimal(float|string|int $value): string
     {
         return number_format((float) $value, 4, '.', '');
+    }
+
+    private function recordPurchaseLedgerIfRecognized(Purchase $purchase, PurchaseStatus $status, ?string $createdBy = null): void
+    {
+        if (in_array($status, [PurchaseStatus::Draft, PurchaseStatus::Cancelled], true)) {
+            return;
+        }
+
+        $this->supplierLedgerService->recordTransaction($purchase->company_id, $purchase->supplier_id, SupplierTransactionType::Purchase, $purchase->grand_total, [
+            'reference_type' => Purchase::class,
+            'reference_id' => $purchase->id,
+            'reference_number' => $purchase->purchase_number,
+            'description' => 'Purchase created',
+            'created_by' => $createdBy,
+            'occurred_at' => Carbon::parse($purchase->purchase_date),
+        ]);
+    }
+
+    private function resetPurchaseLedger(Purchase $purchase): void
+    {
+        DB::table('supplier_transactions')
+            ->where('reference_type', Purchase::class)
+            ->where('reference_id', $purchase->id)
+            ->delete();
     }
 }

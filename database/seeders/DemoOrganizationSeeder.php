@@ -34,7 +34,7 @@ class DemoOrganizationSeeder extends Seeder
             ]
         );
 
-        Warehouse::query()->updateOrCreate(
+        $warehouse = Warehouse::query()->updateOrCreate(
             ['company_id' => $company->id, 'code' => 'MAIN-WH'],
             [
                 'branch_id' => $branch->id,
@@ -49,7 +49,7 @@ class DemoOrganizationSeeder extends Seeder
             [
                 'company_id' => $company->id,
                 'branch_id' => $branch->id,
-                'warehouse_id' => null,
+                'warehouse_id' => $warehouse->id,
                 'name' => 'Micro POS Admin',
                 'password' => 'password',
                 'is_active' => true,
@@ -57,5 +57,19 @@ class DemoOrganizationSeeder extends Seeder
         );
 
         $user->syncRoles(['super-admin']);
+
+        $cashier = User::query()->updateOrCreate(
+            ['email' => 'cashier@micropos.local'],
+            [
+                'company_id' => $company->id,
+                'branch_id' => $branch->id,
+                'warehouse_id' => $warehouse->id,
+                'name' => 'Micro POS Cashier',
+                'password' => 'password',
+                'is_active' => true,
+            ]
+        );
+
+        $cashier->syncRoles(['cashier']);
     }
 }
