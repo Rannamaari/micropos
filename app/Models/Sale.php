@@ -102,6 +102,11 @@ class Sale extends Model
         return $this->hasMany(SaleReturn::class);
     }
 
+    public function receiptPrintEvents(): HasMany
+    {
+        return $this->hasMany(ReceiptPrintEvent::class);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

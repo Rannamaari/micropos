@@ -20,6 +20,7 @@ class TransactionDataResetService
             $saleItems = DB::table('sale_items')->where('company_id', $companyId)->pluck('id');
             $customerPayments = DB::table('customer_payments')->where('company_id', $companyId)->whereIn('sale_id', $sales)->pluck('id');
 
+            DB::table('receipt_print_events')->where('company_id', $companyId)->whereIn('sale_id', $sales)->delete();
             DB::table('stock_movements')->where('company_id', $companyId)->whereIn('reference_type', [Sale::class, SaleReturn::class])->delete();
             DB::table('customer_transactions')->where('company_id', $companyId)->where(function ($query) use ($customerPayments): void {
                 $query->whereIn('reference_type', [Sale::class, SaleReturn::class])

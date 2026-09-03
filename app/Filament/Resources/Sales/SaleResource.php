@@ -52,7 +52,7 @@ class SaleResource extends BaseResource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['customer', 'branch', 'warehouse', 'creator', 'items.product', 'payments']);
+        return parent::getEloquentQuery()->with(['customer', 'branch', 'warehouse', 'creator', 'items.product', 'payments'])->withCount('receiptPrintEvents');
     }
 
     public static function canCreate(): bool

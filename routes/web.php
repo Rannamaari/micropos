@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\PosApiController;
 use App\Http\Controllers\PosPageController;
+use App\Http\Controllers\AdminSaleReceiptController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -42,6 +43,7 @@ Route::middleware('auth')->group(function (): void {
     })->name('logout');
 
     Route::get('/pos', PosPageController::class)->name('pos.index');
+    Route::get('/admin/sales/{sale}/receipt/{format}', AdminSaleReceiptController::class)->name('admin.sales.receipt');
 
     Route::prefix('/pos/api')->group(function (): void {
         Route::get('/products/search', [PosApiController::class, 'searchProducts'])->name('pos.products.search');

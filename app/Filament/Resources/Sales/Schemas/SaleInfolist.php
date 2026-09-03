@@ -27,6 +27,7 @@ class SaleInfolist
                                 TextEntry::make('paid_total')->money('MVR'),
                                 TextEntry::make('balance_due')->money('MVR'),
                                 TextEntry::make('creator.name'),
+                                TextEntry::make('receipt_print_events_count')->label('Admin Reprints'),
                                 TextEntry::make('completed_at')->dateTime(),
                                 TextEntry::make('notes')->columnSpanFull(),
                             ]),
