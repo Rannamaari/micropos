@@ -22,12 +22,17 @@ return new class extends Migration
             $table->timestamps();
 
             $table->foreign('company_id')->references('id')->on('companies')->cascadeOnDelete();
-            $table->foreign('parent_id')->references('id')->on('categories')->nullOnDelete();
             $table->unique(['company_id', 'name']);
             $table->unique(['company_id', 'code']);
             $table->unique(['company_id', 'id']);
             $table->index(['company_id', 'parent_id']);
             $table->index(['company_id', 'is_active']);
+        });
+
+        // PostgreSQL requires the categories primary key to exist before a
+        // self-referencing foreign key can be added.
+        Schema::table('categories', function (Blueprint $table) {
+            $table->foreign('parent_id')->references('id')->on('categories')->nullOnDelete();
         });
 
         Schema::create('brands', function (Blueprint $table) {
