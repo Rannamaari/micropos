@@ -530,6 +530,9 @@ class ProductCatalogFoundationTest extends TestCase
         $result = $importer->import($company->id, 'products', $csv, $warehouse->id);
 
         $this->assertSame(1, $preview['valid']);
+        $this->assertSame(1, $preview['total']);
+        $this->assertSame('Safe Import Product', $preview['rows'][0]['data']['name']);
+        $this->assertSame('CSV-SAFE-001', $preview['rows'][0]['data']['sku']);
         $this->assertSame(1, $result['created']);
         $product = Product::query()->where('company_id', $company->id)->where('sku', 'CSV-SAFE-001')->firstOrFail();
         $this->assertSame('12.0000', app(InventoryService::class)->getBalance($company->id, $warehouse->id, $product->id));

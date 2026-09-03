@@ -39,7 +39,7 @@ class CsvDataImportService
         ];
     }
 
-    /** @return array{rows:list<array<string,mixed>>,valid:int,duplicates:int,invalid:int,errors:list<string>} */
+    /** @return array{rows:list<array<string,mixed>>,total:int,valid:int,duplicates:int,invalid:int,errors:list<string>} */
     public function preview(string $companyId, string $type, string $path, ?string $warehouseId = null): array
     {
         $rows = $this->read($type, $path);
@@ -50,7 +50,11 @@ class CsvDataImportService
 
         foreach ($rows as $row) {
             $result = $this->validateRow($companyId, $type, $row, $seen, $warehouseId);
-            $preview[] = $result + ['row' => $row['row']];
+            $preview[] = $result + [
+                'row' => $row['row'],
+                // Keep the uploaded values so the user can verify the import before committing it.
+                'data' => array_diff_key($row, ['row' => true]),
+            ];
 
             match ($result['status']) {
                 'ready' => $valid++,
@@ -65,6 +69,7 @@ class CsvDataImportService
 
         return [
             'rows' => array_slice($preview, 0, 100),
+            'total' => count($preview),
             'valid' => $valid,
             'duplicates' => $duplicates,
             'invalid' => $invalid,
