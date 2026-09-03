@@ -61,6 +61,17 @@ class BackOfficeManagementUiTest extends TestCase
     }
 
     #[Test]
+    public function only_super_admin_can_open_test_data_reset(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $superAdmin = $this->userWithRole('super-admin', $warehouse);
+        $admin = $this->userWithRole('admin', $warehouse);
+
+        $this->actingAs($superAdmin)->get('/admin/transaction-data-reset')->assertOk();
+        $this->actingAs($admin)->get('/admin/transaction-data-reset')->assertForbidden();
+    }
+
+    #[Test]
     public function cashier_cannot_access_back_office_panel(): void
     {
         $warehouse = Warehouse::factory()->create();
