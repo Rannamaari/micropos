@@ -21,23 +21,11 @@
                                 Fast retail checkout for your counter team.
                             </h1>
                             <p class="max-w-xl text-base leading-7 text-slate-300 md:text-lg">
-                                Sign in with a seeded cashier or admin account to launch the POS, scan products, hold sales, and complete real transactions against the existing sales engine.
+                                Sign in with your authorized account to access the checkout terminal and back-office tools.
                             </p>
                         </div>
                     </div>
 
-                    <div class="grid gap-4 rounded-[1.5rem] border border-white/10 bg-white/5 p-5 text-sm text-slate-200 md:grid-cols-2">
-                        <div>
-                            <p class="mb-1 font-semibold text-white">Demo admin</p>
-                            <p>`admin@micropos.local`</p>
-                            <p>Password: `password`</p>
-                        </div>
-                        <div>
-                            <p class="mb-1 font-semibold text-white">Demo cashier</p>
-                            <p>`cashier@micropos.local`</p>
-                            <p>Password: `password`</p>
-                        </div>
-                    </div>
                 </section>
 
                 <section class="border-t border-white/10 bg-slate-950/55 p-8 md:border-t-0 md:border-l md:p-12">
