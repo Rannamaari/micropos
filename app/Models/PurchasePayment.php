@@ -21,6 +21,7 @@ class PurchasePayment extends Model
         'purchase_id',
         'supplier_id',
         'payment_method',
+        'currency',
         'amount',
         'reference',
         'notes',

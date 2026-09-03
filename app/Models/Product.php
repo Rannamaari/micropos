@@ -120,6 +120,11 @@ class Product extends Model
         return $this->hasMany(InventoryBalance::class);
     }
 
+    public function branchPrices(): HasMany
+    {
+        return $this->hasMany(ProductBranchPrice::class);
+    }
+
     public function stockMovements(): HasMany
     {
         return $this->hasMany(StockMovement::class);

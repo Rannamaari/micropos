@@ -7,6 +7,7 @@ use App\Models\InventoryBalance;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\Warehouse;
 use App\Services\InventoryQueryService;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -24,8 +25,13 @@ class OperationsOverview extends StatsOverviewWidget
             return [];
         }
 
+        $warehouseId = AdminSupport::activeWarehouseId();
+        $currency = $warehouseId ? Warehouse::query()->where('company_id', $companyId)->whereKey($warehouseId)->value('branch_id') : null;
+        $currency = $currency ? \App\Models\Branch::query()->find($currency)?->currency : null;
+
         $todaySalesQuery = Sale::query()
             ->where('company_id', $companyId)
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
             ->whereDate('sale_date', today());
 
         $todaySales = (float) $todaySalesQuery->sum('grand_total');
@@ -34,11 +40,11 @@ class OperationsOverview extends StatsOverviewWidget
         $grossProfit = (float) SaleItem::query()
             ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
             ->where('sale_items.company_id', $companyId)
+            ->when($warehouseId, fn ($query) => $query->where('sales.warehouse_id', $warehouseId))
             ->whereDate('sales.sale_date', today())
             ->selectRaw('COALESCE(SUM((sale_items.unit_price - sale_items.unit_cost) * sale_items.quantity), 0) as gross_profit')
             ->value('gross_profit');
 
-        $warehouseId = AdminSupport::activeWarehouseId();
         $inventoryQueryService = app(InventoryQueryService::class);
 
         $inventoryValue = $warehouseId
@@ -64,28 +70,30 @@ class OperationsOverview extends StatsOverviewWidget
 
         $customerReceivables = (float) Sale::query()
             ->where('company_id', $companyId)
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
             ->sum('balance_due');
 
         $supplierPayables = (float) Purchase::query()
             ->where('company_id', $companyId)
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
             ->sum('balance_due');
 
         return [
-            Stat::make("Today's Sales", number_format($todaySales, 2))
+            Stat::make("Today's Sales", ($currency ?? 'MVR').' '.number_format($todaySales, 2))
                 ->description("{$todayTransactions} transactions")
                 ->color('success'),
-            Stat::make('Gross Profit Today', number_format($grossProfit, 2))
+            Stat::make('Gross Profit Today', ($currency ?? 'MVR').' '.number_format($grossProfit, 2))
                 ->color('success'),
-            Stat::make('Inventory Value', number_format($inventoryValue, 2))
+            Stat::make('Inventory Value', ($currency ?? 'MVR').' '.number_format($inventoryValue, 2))
                 ->description($warehouseId ? 'Active warehouse snapshot' : 'No warehouse context')
                 ->color('info'),
             Stat::make('Low Stock Items', (string) $lowStockItems)
                 ->color($lowStockItems > 0 ? 'warning' : 'success'),
             Stat::make('Out of Stock Items', (string) $outOfStockItems)
                 ->color($outOfStockItems > 0 ? 'danger' : 'success'),
-            Stat::make('Customer Receivables', number_format($customerReceivables, 2))
+            Stat::make('Customer Receivables', ($currency ?? 'MVR').' '.number_format($customerReceivables, 2))
                 ->color('warning'),
-            Stat::make('Supplier Payables', number_format($supplierPayables, 2))
+            Stat::make('Supplier Payables', ($currency ?? 'MVR').' '.number_format($supplierPayables, 2))
                 ->color('warning'),
         ];
     }

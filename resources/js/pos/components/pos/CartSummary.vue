@@ -25,14 +25,14 @@ const store = usePosStore();
             <p class="mt-2 font-[var(--font-display)] text-4xl font-black text-white md:text-5xl">{{ store.formatMoney(store.totals.grandTotal) }}</p>
         </div>
 
-        <div class="mt-4 grid gap-3 md:grid-cols-3">
-            <button type="button" class="pos-button-secondary" :disabled="store.loading.holdingSale || !store.canHoldSale" @click="emit('hold')">
+        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+            <button type="button" class="pos-button-secondary min-h-12" :disabled="store.loading.holdingSale || !store.canHoldSale" @click="emit('hold')">
                 {{ store.loading.holdingSale ? 'Holding…' : 'Hold Sale' }}
             </button>
-            <button type="button" class="pos-button-primary" :disabled="!canOpenPayment || store.loading.completingSale" @click="emit('payment')">
+            <button type="button" class="pos-button-primary min-h-12" :disabled="!canOpenPayment || store.loading.completingSale" @click="emit('payment')">
                 {{ store.loading.completingSale ? 'Processing…' : 'Payment (F8)' }}
             </button>
-            <button type="button" class="pos-button-secondary" :disabled="!store.items.length" @click="emit('new-sale')">New Sale</button>
+            <button type="button" class="pos-button-secondary min-h-12" :disabled="!store.items.length" @click="emit('new-sale')">New Sale</button>
         </div>
     </div>
 </template>

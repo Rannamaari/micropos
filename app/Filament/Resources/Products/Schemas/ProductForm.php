@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Products\Schemas;
 use App\Filament\Support\AdminSupport;
 use App\Filament\Resources\InventoryOverview\InventoryOverviewResource;
 use App\Models\Product;
+use App\Models\Branch;
 use App\Services\InventoryQueryService;
 use App\Support\InventoryStatus;
 use Filament\Forms\Components\Hidden;
@@ -68,6 +69,23 @@ class ProductForm
                                 TextInput::make('tax_rate')->numeric()->minValue(0)->default(0),
                                 TextInput::make('minimum_stock')->numeric()->minValue(0)->default(0),
                             ]),
+                    ]),
+                Section::make('Store Prices')
+                    ->description('Set the selling and cost price for each store. POS always uses the price for its assigned store.')
+                    ->schema([
+                        Repeater::make('branchPrices')
+                            ->relationship()
+                            ->reorderable(false)
+                            ->schema([
+                                Select::make('branch_id')
+                                    ->required()
+                                    ->options(fn (): array => Branch::query()->where('company_id', AdminSupport::companyId())->orderBy('name')->pluck('name', 'id')->all()),
+                                Select::make('currency')->required()->options(['MVR' => 'MVR', 'USD' => 'USD']),
+                                TextInput::make('cost_price')->numeric()->minValue(0)->default(0)->required(),
+                                TextInput::make('selling_price')->numeric()->minValue(0)->required(),
+                                TextInput::make('wholesale_price')->numeric()->minValue(0),
+                                Hidden::make('company_id')->default(fn (): ?string => AdminSupport::companyId()),
+                            ])->columns(5),
                     ]),
                 Section::make('Inventory Rules')
                     ->schema([

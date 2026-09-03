@@ -245,7 +245,8 @@ async function submitReturn() {
                             </div>
 
                             <div class="flex flex-wrap gap-2">
-                                <button class="pos-button-secondary" @click="store.printActiveSale()">Print Receipt (Placeholder)</button>
+                                <button class="pos-button-secondary" @click="store.printActiveSale(undefined, 'thermal')">Thermal Receipt</button>
+                                <button class="pos-button-secondary" @click="store.printActiveSale(undefined, 'a4')">A4 Tax Invoice</button>
                                 <button v-if="canReturnSelectedSale" class="pos-button-primary" :disabled="store.loading.processingReturn" @click="submitReturn">
                                     {{ store.loading.processingReturn ? 'Processing…' : 'Return Items' }}
                                 </button>

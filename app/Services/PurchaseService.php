@@ -8,6 +8,7 @@ use App\Enums\SupplierTransactionType;
 use App\Exceptions\TransactionException;
 use App\Models\Branch;
 use App\Models\Product;
+use App\Models\ProductBranchPrice;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\PurchasePayment;
@@ -48,7 +49,7 @@ class PurchaseService
                 throw new TransactionException('At least one purchase item is required.');
             }
 
-            $lineItems = $this->preparePurchaseItems($companyId, $items);
+            $lineItems = $this->preparePurchaseItems($companyId, $branch?->id, $items);
             $totals = $this->calculateTotals(
                 $lineItems->sum('line_subtotal'),
                 $lineItems->sum('discount_amount'),
@@ -65,6 +66,8 @@ class PurchaseService
                 'purchase_number' => $attributes['purchase_number'] ?? $this->numberSequenceService->next($companyId, 'purchase'),
                 'supplier_invoice_number' => $attributes['supplier_invoice_number'] ?? null,
                 'status' => $status,
+                'currency' => $branch?->currency ?? 'MVR',
+                'currency' => $branch?->currency ?? 'MVR',
                 'purchase_date' => $attributes['purchase_date'] ?? now()->toDateString(),
                 'expected_date' => $attributes['expected_date'] ?? null,
                 'subtotal' => $totals['subtotal'],
@@ -150,7 +153,7 @@ class PurchaseService
                 throw new TransactionException('At least one purchase item is required.');
             }
 
-            $lineItems = $this->preparePurchaseItems($companyId, $items);
+            $lineItems = $this->preparePurchaseItems($companyId, $branch?->id, $items);
             $totals = $this->calculateTotals(
                 $lineItems->sum('line_subtotal'),
                 $lineItems->sum('discount_amount'),
@@ -262,9 +265,14 @@ class PurchaseService
                     $occurredAt,
                 );
 
-                Product::query()
-                    ->whereKey($item->product_id)
-                    ->update(['cost_price' => $item->unit_cost]);
+                ProductBranchPrice::query()->updateOrCreate(
+                    ['company_id' => $purchase->company_id, 'branch_id' => $purchase->branch_id, 'product_id' => $item->product_id],
+                    [
+                        'currency' => $purchase->currency,
+                        'cost_price' => $item->unit_cost,
+                        'selling_price' => Product::query()->whereKey($item->product_id)->value('selling_price'),
+                    ],
+                );
 
                 $didReceive = true;
             }
@@ -308,6 +316,7 @@ class PurchaseService
                 'purchase_id' => $purchase->id,
                 'supplier_id' => $purchase->supplier_id,
                 'payment_method' => $paymentMethod,
+                'currency' => $purchase->currency,
                 'amount' => $this->formatDecimal($numericAmount),
                 'reference' => $attributes['reference'] ?? null,
                 'notes' => $attributes['notes'] ?? null,
@@ -490,9 +499,9 @@ class PurchaseService
         });
     }
 
-    private function preparePurchaseItems(string $companyId, array $items): Collection
+    private function preparePurchaseItems(string $companyId, ?string $branchId, array $items): Collection
     {
-        return collect($items)->map(function (array $item) use ($companyId): array {
+        return collect($items)->map(function (array $item) use ($companyId, $branchId): array {
             $product = Product::query()
                 ->where('company_id', $companyId)
                 ->find($item['product_id'] ?? null);
@@ -502,7 +511,8 @@ class PurchaseService
             }
 
             $orderedQuantity = $this->normalizePositiveDecimal($item['ordered_quantity'] ?? $item['quantity'] ?? null, 'Ordered quantity');
-            $unitCost = $this->normalizeNonNegativeDecimal($item['unit_cost'] ?? null, 'Unit cost');
+            $branchCost = $branchId ? ProductBranchPrice::query()->where('branch_id', $branchId)->where('product_id', $product->id)->value('cost_price') : null;
+            $unitCost = $this->normalizeNonNegativeDecimal($item['unit_cost'] ?? $branchCost ?? $product->cost_price, 'Unit cost');
             $discountAmount = $this->normalizeNonNegativeDecimal($item['discount_amount'] ?? 0, 'Discount amount');
             $taxRate = $this->normalizeNonNegativeDecimal($item['tax_rate'] ?? 0, 'Tax rate');
             $lineSubtotal = round($orderedQuantity * $unitCost, 4);

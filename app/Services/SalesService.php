@@ -9,6 +9,7 @@ use App\Exceptions\TransactionException;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\ProductBranchPrice;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
@@ -49,6 +50,7 @@ class SalesService
 
         return DB::transaction(function () use ($companyId, $branchId, $warehouseId, $items, $payments, $attributes): Sale {
             $warehouse = $this->resolveWarehouse($companyId, $branchId, $warehouseId);
+            $branch = Branch::query()->where('company_id', $companyId)->findOrFail($branchId);
             $customer = $this->resolveCustomer($companyId, $attributes['customer_id'] ?? null);
             $status = $attributes['status'] ?? SaleStatus::Completed;
 
@@ -60,7 +62,7 @@ class SalesService
                 throw new TransactionException('At least one sale item is required.');
             }
 
-            $lineItems = $this->prepareSaleItems($companyId, $items);
+            $lineItems = $this->prepareSaleItems($companyId, $branchId, $items);
             $totals = $this->calculateTotals(
                 $lineItems->sum('line_subtotal'),
                 $lineItems->sum('discount_amount'),
@@ -74,6 +76,7 @@ class SalesService
                 'customer_id' => $customer?->id,
                 'sale_number' => $attributes['sale_number'] ?? $this->numberSequenceService->next($companyId, 'sale'),
                 'status' => $status,
+                'currency' => $branch->currency,
                 'client_transaction_uuid' => $attributes['client_transaction_uuid'] ?? null,
                 'sale_date' => $attributes['sale_date'] ?? now()->toDateString(),
                 'subtotal' => $totals['subtotal'],
@@ -162,8 +165,9 @@ class SalesService
             }
 
             $warehouse = $this->resolveWarehouse($companyId, $branchId, $warehouseId);
+            $branch = Branch::query()->where('company_id', $companyId)->findOrFail($branchId);
             $customer = $this->resolveCustomer($companyId, $attributes['customer_id'] ?? null);
-            $lineItems = $this->prepareSaleItems($companyId, $items);
+            $lineItems = $this->prepareSaleItems($companyId, $branchId, $items);
             $totals = $this->calculateTotals(
                 $lineItems->sum('line_subtotal'),
                 $lineItems->sum('discount_amount'),
@@ -174,6 +178,7 @@ class SalesService
 
             $attributesToUpdate = [
                 'branch_id' => $branchId,
+                'currency' => $branch->currency,
                 'warehouse_id' => $warehouse->id,
                 'customer_id' => $customer?->id,
                 'subtotal' => $totals['subtotal'],
@@ -462,6 +467,7 @@ class SalesService
                 'company_id' => $sale->company_id,
                 'sale_id' => $sale->id,
                 'payment_method' => $payment['payment_method'] ?? 'cash',
+                'currency' => $sale->currency,
                 'amount' => $this->formatDecimal($amount),
                 'amount_tendered' => $amountTendered !== null ? $this->formatDecimal($amountTendered) : null,
                 'change_due' => $this->formatDecimal($changeDue),
@@ -488,7 +494,7 @@ class SalesService
             }
 
             if ($customer->credit_limit !== null) {
-                $currentBalance = (float) $this->customerLedgerService->currentBalance($customer->id);
+                $currentBalance = (float) $this->customerLedgerService->currentBalance($customer->id, $sale->currency);
 
                 if ($currentBalance + $balanceDue > (float) $customer->credit_limit + 0.0001) {
                     throw new TransactionException('Customer credit limit would be exceeded.');
@@ -526,6 +532,7 @@ class SalesService
                 'description' => 'Credit sale',
                 'created_by' => $attributes['created_by'] ?? null,
                 'occurred_at' => $attributes['completed_at'] ?? now(),
+                'currency' => $sale->currency,
             ]);
         }
 
@@ -547,9 +554,9 @@ class SalesService
         return $this->formatDecimal($balance);
     }
 
-    private function prepareSaleItems(string $companyId, array $items): Collection
+    private function prepareSaleItems(string $companyId, string $branchId, array $items): Collection
     {
-        return collect($items)->map(function (array $item) use ($companyId): array {
+        return collect($items)->map(function (array $item) use ($companyId, $branchId): array {
             $product = Product::query()
                 ->where('company_id', $companyId)
                 ->find($item['product_id'] ?? null);
@@ -559,8 +566,9 @@ class SalesService
             }
 
             $quantity = $this->normalizePositiveDecimal($item['quantity'] ?? null, 'Sale quantity');
-            $unitPrice = $this->normalizeNonNegativeDecimal($item['unit_price'] ?? $product->selling_price, 'Unit price');
-            $unitCost = $this->normalizeNonNegativeDecimal($item['unit_cost'] ?? $product->cost_price, 'Unit cost');
+            $branchPrice = ProductBranchPrice::query()->where('branch_id', $branchId)->where('product_id', $product->id)->first();
+            $unitPrice = $this->normalizeNonNegativeDecimal($item['unit_price'] ?? $branchPrice?->selling_price ?? $product->selling_price, 'Unit price');
+            $unitCost = $this->normalizeNonNegativeDecimal($item['unit_cost'] ?? $branchPrice?->cost_price ?? $product->cost_price, 'Unit cost');
             $discountAmount = $this->normalizeNonNegativeDecimal($item['discount_amount'] ?? 0, 'Discount amount');
             $taxRate = $this->normalizeNonNegativeDecimal($item['tax_rate'] ?? $product->tax_rate ?? 0, 'Tax rate');
             $lineSubtotal = round($quantity * $unitPrice, 4);

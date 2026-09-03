@@ -35,7 +35,7 @@ class PosPageController extends Controller
                 'company' => [
                     'id' => $user->company?->id,
                     'name' => $user->company?->name,
-                    'currency' => $user->company?->currency ?? 'MVR',
+                    'currency' => $context['branch']->currency,
                 ],
                 'branch' => [
                     'id' => $context['branch']->id,

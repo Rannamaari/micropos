@@ -13,11 +13,13 @@ use Illuminate\Support\Facades\DB;
 
 class CustomerLedgerService
 {
-    public function currentBalance(string $customerId): string
+    public function currentBalance(string $customerId, ?string $currency = null): string
     {
-        $total = CustomerTransaction::query()
+        $query = CustomerTransaction::query()
             ->where('customer_id', $customerId)
-            ->sum('amount');
+            ->when($currency, fn ($query) => $query->where('currency', $currency));
+
+        $total = $query->sum('amount');
 
         return $this->formatDecimal($total);
     }
@@ -46,6 +48,7 @@ class CustomerLedgerService
             'customer_id' => $customerId,
             'type' => $type,
             'amount' => $this->formatDecimal($amount),
+            'currency' => $attributes['currency'] ?? 'MVR',
             'reference_type' => $attributes['reference_type'] ?? null,
             'reference_id' => $attributes['reference_id'] ?? null,
             'reference_number' => $attributes['reference_number'] ?? null,
@@ -87,7 +90,9 @@ class CustomerLedgerService
                 }
             }
 
-            if ((float) $this->currentBalance($customer->id) + 0.0001 < $numericAmount) {
+            $currency = $sale?->currency ?? ($attributes['currency'] ?? 'MVR');
+
+            if ((float) $this->currentBalance($customer->id, $currency) + 0.0001 < $numericAmount) {
                 throw new TransactionException('Customer payment cannot exceed the receivable balance.');
             }
 
@@ -96,6 +101,7 @@ class CustomerLedgerService
                 'customer_id' => $customerId,
                 'sale_id' => $sale?->id,
                 'payment_method' => $paymentMethod,
+                'currency' => $currency,
                 'amount' => $this->formatDecimal($numericAmount),
                 'reference' => $attributes['reference'] ?? null,
                 'notes' => $attributes['notes'] ?? null,
@@ -110,6 +116,7 @@ class CustomerLedgerService
                 'description' => $attributes['notes'] ?? 'Customer payment',
                 'created_by' => $attributes['created_by'] ?? null,
                 'occurred_at' => $attributes['paid_at'] ?? now(),
+                'currency' => $currency,
             ]);
 
             if ($sale) {

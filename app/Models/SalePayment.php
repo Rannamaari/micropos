@@ -20,6 +20,7 @@ class SalePayment extends Model
         'company_id',
         'sale_id',
         'payment_method',
+        'currency',
         'amount',
         'amount_tendered',
         'change_due',

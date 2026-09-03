@@ -21,6 +21,7 @@ class CustomerPayment extends Model
         'customer_id',
         'sale_id',
         'payment_method',
+        'currency',
         'amount',
         'reference',
         'notes',

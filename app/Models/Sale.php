@@ -26,6 +26,7 @@ class Sale extends Model
         'customer_id',
         'sale_number',
         'status',
+        'currency',
         'client_transaction_uuid',
         'sale_date',
         'subtotal',

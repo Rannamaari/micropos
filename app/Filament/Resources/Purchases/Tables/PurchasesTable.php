@@ -23,9 +23,9 @@ class PurchasesTable
                 TextColumn::make('warehouse.name')->label('Warehouse')->sortable(),
                 TextColumn::make('supplier_invoice_number')->label('Supplier Invoice')->searchable(),
                 TextColumn::make('status')->badge()->sortable(),
-                TextColumn::make('grand_total')->money('MVR')->sortable(),
-                TextColumn::make('paid_total')->money('MVR')->sortable(),
-                TextColumn::make('balance_due')->money('MVR')->sortable(),
+                TextColumn::make('grand_total')->formatStateUsing(fn ($state, $record): string => "{$record->currency} ".number_format((float) $state, 2))->sortable(),
+                TextColumn::make('paid_total')->formatStateUsing(fn ($state, $record): string => "{$record->currency} ".number_format((float) $state, 2))->sortable(),
+                TextColumn::make('balance_due')->formatStateUsing(fn ($state, $record): string => "{$record->currency} ".number_format((float) $state, 2))->sortable(),
                 TextColumn::make('creator.name')->label('Created By')->toggleable(),
             ])
             ->filters([

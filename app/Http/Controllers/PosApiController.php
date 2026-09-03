@@ -58,7 +58,7 @@ class PosApiController extends Controller
             ->get();
 
         return response()->json([
-            'data' => $this->transformProductsForPos($context['company_id'], $context['warehouse_id'], $products),
+            'data' => $this->transformProductsForPos($context['company_id'], $context['branch_id'], $context['warehouse_id'], $products),
         ]);
     }
 
@@ -77,7 +77,7 @@ class PosApiController extends Controller
         }
 
         return response()->json([
-            'data' => $this->transformProductForPos($context['company_id'], $context['warehouse_id'], $product),
+            'data' => $this->transformProductForPos($context['company_id'], $context['branch_id'], $context['warehouse_id'], $product),
         ]);
     }
 
@@ -103,7 +103,7 @@ class PosApiController extends Controller
             ->get();
 
         return response()->json([
-            'data' => $customers->map(fn (Customer $customer): array => $this->transformCustomer($customer))->all(),
+            'data' => $customers->map(fn (Customer $customer): array => $this->transformCustomer($customer, $context['branch']->currency))->all(),
         ]);
     }
 
@@ -129,7 +129,7 @@ class PosApiController extends Controller
 
         return response()->json([
             'message' => 'Customer created.',
-            'data' => $this->transformCustomer($customer),
+            'data' => $this->transformCustomer($customer, $context['branch']->currency),
         ], 201);
     }
 
@@ -545,7 +545,10 @@ class PosApiController extends Controller
             if (($item['unit_price'] ?? null) !== null && isset($item['product_id'])) {
                 $product = Product::query()->find($item['product_id']);
 
-                if ($product && round((float) $item['unit_price'], 4) !== round((float) $product->selling_price, 4) && ! $request->user()->can('sales.price_override')) {
+                $context = $this->posContext($request, 'sales.create');
+                $storePrice = $product?->branchPrices()->where('branch_id', $context['branch_id'])->value('selling_price');
+
+                if ($product && round((float) $item['unit_price'], 4) !== round((float) ($storePrice ?? $product->selling_price), 4) && ! $request->user()->can('sales.price_override')) {
                     throw ValidationException::withMessages([
                         'price_override' => ['Price override requires permission.'],
                     ]);
@@ -611,35 +614,36 @@ class PosApiController extends Controller
      * @param  \Illuminate\Support\Collection<int, Product>  $products
      * @return array<int, array<string, mixed>>
      */
-    private function transformProductsForPos(string $companyId, string $warehouseId, $products): array
+    private function transformProductsForPos(string $companyId, string $branchId, string $warehouseId, $products): array
     {
         $balances = $this->inventoryQueryService->getBalancesForProducts($companyId, $warehouseId, $products->pluck('id')->all());
 
-        return $products->map(function (Product $product) use ($balances): array {
-            return $this->transformProductForPosFromBalance($product, $balances[$product->id] ?? '0.0000');
+        return $products->map(function (Product $product) use ($balances, $branchId): array {
+            return $this->transformProductForPosFromBalance($product, $balances[$product->id] ?? '0.0000', $branchId);
         })->all();
     }
 
-    private function transformProductForPos(string $companyId, string $warehouseId, Product $product): array
+    private function transformProductForPos(string $companyId, string $branchId, string $warehouseId, Product $product): array
     {
         $balance = $product->track_inventory
             ? $this->inventoryQueryService->getBalance($companyId, $warehouseId, $product->id)
             : null;
 
-        return $this->transformProductForPosFromBalance($product, $balance);
+        return $this->transformProductForPosFromBalance($product, $balance, $branchId);
     }
 
-    private function transformProductForPosFromBalance(Product $product, ?string $balance): array
+    private function transformProductForPosFromBalance(Product $product, ?string $balance, string $branchId): array
     {
         $product->loadMissing(['unit', 'primaryBarcode']);
+        $price = $product->branchPrices()->where('branch_id', $branchId)->first();
 
         return [
             'id' => $product->id,
             'sku' => $product->sku,
             'name' => $product->name,
             'barcode' => $product->primaryBarcode?->barcode,
-            'price' => (string) $product->selling_price,
-            'cost_price' => (string) $product->cost_price,
+            'price' => (string) ($price?->selling_price ?? $product->selling_price),
+            'cost_price' => (string) ($price?->cost_price ?? $product->cost_price),
             'tax_rate' => (string) $product->tax_rate,
             'stock' => $product->track_inventory ? $balance : null,
             'stock_label' => $product->track_inventory ? $balance : 'Non-stock',
@@ -652,7 +656,7 @@ class PosApiController extends Controller
         ];
     }
 
-    private function transformCustomer(Customer $customer): array
+    private function transformCustomer(Customer $customer, ?string $currency = null): array
     {
         return [
             'id' => $customer->id,
@@ -660,7 +664,7 @@ class PosApiController extends Controller
             'name' => $customer->name,
             'phone' => $customer->phone,
             'email' => $customer->email,
-            'balance' => $this->customerLedgerService->currentBalance($customer->id),
+            'balance' => $this->customerLedgerService->currentBalance($customer->id, $currency),
             'credit_limit' => $customer->credit_limit,
             'is_walk_in' => $customer->is_walk_in,
         ];
@@ -671,6 +675,7 @@ class PosApiController extends Controller
         return [
             'id' => $sale->id,
             'sale_number' => $sale->sale_number,
+            'currency' => $sale->currency,
             'customer' => $sale->customer?->name ?? 'Walk-in Customer',
             'amount' => (string) $sale->grand_total,
             'created_at' => $sale->created_at?->toIso8601String(),
@@ -717,7 +722,18 @@ class PosApiController extends Controller
             'company' => [
                 'id' => $sale->company?->id,
                 'name' => $sale->company?->name,
-                'currency' => $sale->company?->currency,
+                'currency' => $sale->currency,
+                'tax_number' => $sale->company?->tax_number,
+                'address' => $sale->company?->address,
+                'city' => $sale->company?->city,
+                'country' => $sale->company?->country,
+                'phone' => $sale->company?->phone,
+                'receipt_shop_name' => $sale->company?->receipt_shop_name,
+                'receipt_gst_label' => $sale->company?->receipt_gst_label ?? 'GST No.',
+                'receipt_header' => $sale->company?->receipt_header,
+                'receipt_footer' => $sale->company?->receipt_footer,
+                'receipt_show_address' => $sale->company?->receipt_show_address ?? true,
+                'receipt_show_phone' => $sale->company?->receipt_show_phone ?? true,
             ],
             'branch' => [
                 'id' => $sale->branch?->id,
@@ -733,7 +749,7 @@ class PosApiController extends Controller
                 'id' => $sale->creator?->id,
                 'name' => $sale->creator?->name,
             ],
-            'customer' => $sale->customer ? $this->transformCustomer($sale->customer) : null,
+            'customer' => $sale->customer ? $this->transformCustomer($sale->customer, $sale->currency) : null,
             'subtotal' => (string) $sale->subtotal,
             'discount_total' => (string) $sale->discount_total,
             'tax_total' => (string) $sale->tax_total,

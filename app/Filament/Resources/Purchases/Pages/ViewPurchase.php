@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Purchases\Pages;
 use App\Enums\PurchaseStatus;
 use App\Filament\Resources\Purchases\PurchaseResource;
 use App\Models\Purchase;
+use App\Models\PurchaseItem;
 use App\Models\PurchaseReturnItem;
 use App\Services\PurchaseService;
 use Filament\Actions\Action;
@@ -57,6 +58,40 @@ class ViewPurchase extends ViewRecord
                     DatePicker::make('received_at')->default(now()),
                 ])
                 ->action(function (array $data): void {
+                    $purchase = $this->freshPurchaseRecord();
+                    $itemsById = $purchase->items->keyBy('id');
+                    $errors = [];
+
+                    foreach ($data['items'] ?? [] as $index => $itemData) {
+                        $receiveNow = (float) ($itemData['receive_now'] ?? 0);
+
+                        if ($receiveNow <= 0) {
+                            continue;
+                        }
+
+                        /** @var PurchaseItem|null $purchaseItem */
+                        $purchaseItem = $itemsById->get($itemData['purchase_item_id'] ?? null);
+
+                        if (! $purchaseItem) {
+                            $errors["items.{$index}.receive_now"] = 'This purchase line no longer exists.';
+                            continue;
+                        }
+
+                        $remaining = max(0, round((float) $purchaseItem->ordered_quantity - (float) $purchaseItem->received_quantity, 4));
+
+                        if ($receiveNow > $remaining + 0.0001) {
+                            $errors["items.{$index}.receive_now"] = sprintf(
+                                'Only %s remaining for %s.',
+                                number_format($remaining, 4, '.', ''),
+                                $purchaseItem->product?->name ?? 'this item',
+                            );
+                        }
+                    }
+
+                    if ($errors !== []) {
+                        throw ValidationException::withMessages($errors);
+                    }
+
                     $quantities = collect($data['items'] ?? [])
                         ->filter(fn (array $item): bool => (float) ($item['receive_now'] ?? 0) > 0)
                         ->mapWithKeys(fn (array $item): array => [$item['purchase_item_id'] => $item['receive_now']])
@@ -202,8 +237,7 @@ class ViewPurchase extends ViewRecord
      */
     private function receiptDefaults(): array
     {
-        /** @var Purchase $purchase */
-        $purchase = $this->getRecord()->loadMissing('items.product');
+        $purchase = $this->freshPurchaseRecord();
 
         return $purchase->items->map(function ($item): array {
             $remaining = max(0, (float) $item->ordered_quantity - (float) $item->received_quantity);
@@ -225,8 +259,7 @@ class ViewPurchase extends ViewRecord
      */
     private function returnDefaults(): array
     {
-        /** @var Purchase $purchase */
-        $purchase = $this->getRecord()->loadMissing('items.product');
+        $purchase = $this->freshPurchaseRecord();
         $returnedByItem = PurchaseReturnItem::query()
             ->selectRaw('purchase_item_id, COALESCE(SUM(quantity), 0) as returned_quantity')
             ->whereIn('purchase_item_id', $purchase->items->pluck('id'))
@@ -250,8 +283,7 @@ class ViewPurchase extends ViewRecord
 
     private function hasReturnableItems(): bool
     {
-        /** @var Purchase $purchase */
-        $purchase = $this->getRecord();
+        $purchase = $this->freshPurchaseRecord();
         $returnedByItem = PurchaseReturnItem::query()
             ->selectRaw('purchase_item_id, COALESCE(SUM(quantity), 0) as returned_quantity')
             ->whereIn('purchase_item_id', $purchase->items->pluck('id'))
@@ -259,5 +291,15 @@ class ViewPurchase extends ViewRecord
             ->pluck('returned_quantity', 'purchase_item_id');
 
         return $purchase->items->contains(fn ($item): bool => ((float) $item->received_quantity - (float) ($returnedByItem[$item->id] ?? 0)) > 0.0001);
+    }
+
+    private function freshPurchaseRecord(): Purchase
+    {
+        /** @var Purchase $purchase */
+        $purchase = Purchase::query()
+            ->with(['items.product', 'payments'])
+            ->findOrFail($this->getRecord()->id);
+
+        return $purchase;
     }
 }

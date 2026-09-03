@@ -25,6 +25,7 @@ class Branch extends Model
         'email',
         'address',
         'city',
+        'currency',
         'is_active',
     ];
 
@@ -46,6 +47,11 @@ class Branch extends Model
     public function warehouses(): HasMany
     {
         return $this->hasMany(Warehouse::class);
+    }
+
+    public function productPrices(): HasMany
+    {
+        return $this->hasMany(ProductBranchPrice::class);
     }
 
     public function users(): HasMany

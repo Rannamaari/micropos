@@ -22,6 +22,7 @@ class CustomerTransaction extends Model
         'customer_id',
         'type',
         'amount',
+        'currency',
         'reference_type',
         'reference_id',
         'reference_number',

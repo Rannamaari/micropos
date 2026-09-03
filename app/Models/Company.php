@@ -18,12 +18,18 @@ class Company extends Model
      */
     protected $fillable = [
         'name',
+        'receipt_shop_name',
         'legal_name',
         'registration_number',
         'tax_number',
+        'receipt_gst_label',
         'phone',
         'email',
         'address',
+        'receipt_header',
+        'receipt_footer',
+        'receipt_show_address',
+        'receipt_show_phone',
         'city',
         'country',
         'timezone',
@@ -38,6 +44,8 @@ class Company extends Model
     {
         return [
             'is_active' => 'boolean',
+            'receipt_show_address' => 'boolean',
+            'receipt_show_phone' => 'boolean',
         ];
     }
 

@@ -70,6 +70,8 @@ function onGlobalKeydown(event) {
         store.heldSalesModalOpen = false;
         store.saleLookupModalOpen = false;
         store.shortcutModalOpen = false;
+        store.saleCompleteModal = null;
+        focusSearch();
     }
 }
 

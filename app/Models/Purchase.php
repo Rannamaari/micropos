@@ -27,6 +27,7 @@ class Purchase extends Model
         'purchase_number',
         'supplier_invoice_number',
         'status',
+        'currency',
         'purchase_date',
         'expected_date',
         'subtotal',

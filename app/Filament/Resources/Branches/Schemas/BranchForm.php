@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Branches\Schemas;
 
 use App\Filament\Support\AdminSupport;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
@@ -26,6 +27,10 @@ class BranchForm
                                 TextInput::make('phone')->maxLength(255),
                                 TextInput::make('email')->email()->maxLength(255),
                                 TextInput::make('city')->maxLength(255),
+                                Select::make('currency')->options([
+                                    'MVR' => 'MVR - Maldivian Rufiyaa',
+                                    'USD' => 'USD - US Dollar',
+                                ])->required()->default('MVR'),
                                 TextInput::make('address')->maxLength(65535)->columnSpanFull(),
                                 Toggle::make('is_active')->default(true)->inline(false),
                             ]),
