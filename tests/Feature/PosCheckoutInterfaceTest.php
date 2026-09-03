@@ -220,7 +220,8 @@ class PosCheckoutInterfaceTest extends TestCase
         $this->actingAs($cashier)
             ->postJson('/pos/api/sales', $payload)
             ->assertOk()
-            ->assertJsonPath('data.payments.0.change_due', '5.0000');
+            ->assertJsonPath('data.payments.0.change_due', '5.0000')
+            ->assertJsonPath('data.receipt.branch_name', $warehouse->branch->name);
 
         $this->actingAs($cashier)
             ->postJson('/pos/api/sales', $payload)
@@ -701,7 +702,8 @@ class PosCheckoutInterfaceTest extends TestCase
         $this->actingAs($cashier)
             ->getJson('/pos/api/sales?search=SAL-HISTORY-100')
             ->assertOk()
-            ->assertJsonPath('data.0.sale_number', $cashSale->sale_number);
+            ->assertJsonPath('data.0.sale_number', $cashSale->sale_number)
+            ->assertJsonPath('data.0.branch', $warehouse->branch->name);
 
         $customerSearch = $this->actingAs($cashier)
             ->getJson('/pos/api/sales?search=Aisha')

@@ -203,6 +203,7 @@ async function submitReturn() {
                                         {{ result.cashier ?? 'Unknown cashier' }}
                                         <span v-if="result.payment_method">• {{ result.payment_method }}</span>
                                     </p>
+                                    <p v-if="result.branch" class="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--pos-accent)]">{{ result.branch }}</p>
                                 </div>
 
                                 <div class="grid shrink-0 gap-1 text-right text-sm">

@@ -587,7 +587,6 @@ export const usePosStore = defineStore('pos', () => {
 
         receipt.onload = () => {
             receipt.print();
-            receipt.onafterprint = () => receipt.close();
         };
 
         const thermalReceipt = `<header class="center"><div class="shop">${escape(shopName)}</div><div class="muted">${escape(gstLabel)}: ${escape(taxNumber)}</div>${showAddress && address ? `<div class="muted">${escape(address)}</div>` : ''}${showPhone && receiptProfile.phone ? `<div class="muted">${escape(receiptProfile.phone)}</div>` : ''}${header}</header>

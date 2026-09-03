@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Sales\Tables;
 
+use App\Filament\Support\AdminSupport;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -15,6 +16,8 @@ class SalesTable
             ->columns([
                 TextColumn::make('sale_number')->searchable()->sortable(),
                 TextColumn::make('sale_date')->date()->sortable(),
+                TextColumn::make('branch.name')->label('Branch')->badge()->sortable(),
+                TextColumn::make('warehouse.name')->label('Warehouse')->toggleable(),
                 TextColumn::make('customer.name')->toggleable(),
                 TextColumn::make('status')->badge()->sortable(),
                 TextColumn::make('grand_total')->formatStateUsing(fn ($state, $record): string => "{$record->currency} ".number_format((float) $state, 2))->sortable(),
@@ -23,6 +26,10 @@ class SalesTable
                 TextColumn::make('creator.name')->label('Cashier')->toggleable(),
             ])
             ->filters([
+                SelectFilter::make('branch_id')
+                    ->label('Branch')
+                    ->options(fn (): array => AdminSupport::branchOptions())
+                    ->searchable(),
                 SelectFilter::make('status')
                     ->options([
                         'draft' => 'Draft',

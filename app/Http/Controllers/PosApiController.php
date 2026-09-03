@@ -688,7 +688,7 @@ class PosApiController extends Controller
 
     private function transformSaleHistoryRow(Sale $sale): array
     {
-        $sale->loadMissing(['customer', 'creator', 'payments']);
+        $sale->loadMissing(['customer', 'branch', 'creator', 'payments']);
 
         return [
             'id' => $sale->id,
@@ -696,6 +696,7 @@ class PosApiController extends Controller
             'date' => $sale->cancelled_at?->toIso8601String() ?? $sale->completed_at?->toIso8601String() ?? $sale->created_at?->toIso8601String(),
             'customer' => $sale->customer?->name ?? 'Walk-in Customer',
             'customer_phone' => $sale->customer?->phone,
+            'branch' => $sale->branch?->name,
             'cashier' => $sale->creator?->name,
             'payment_method' => $sale->payments->pluck('payment_method')->filter()->unique()->values()->implode(', '),
             'total' => (string) $sale->grand_total,
