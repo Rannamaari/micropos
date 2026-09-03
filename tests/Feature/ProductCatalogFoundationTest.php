@@ -8,6 +8,9 @@ use App\Models\Company;
 use App\Models\Product;
 use App\Models\ProductBarcode;
 use App\Models\Unit;
+use App\Models\Warehouse;
+use App\Services\CsvDataImportService;
+use App\Services\InventoryService;
 use App\Services\ProductImportService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\LargeProductCatalogSeeder;
@@ -508,6 +511,29 @@ class ProductCatalogFoundationTest extends TestCase
 
         $this->assertSame(0, $result['created']);
         $this->assertNotEmpty($result['errors']);
+    }
+
+    #[Test]
+    public function csv_data_import_previews_duplicates_and_creates_opening_stock(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $company = Company::query()->where('name', 'Micro POS Demo Company')->firstOrFail();
+        $warehouse = Warehouse::query()->where('company_id', $company->id)->firstOrFail();
+        $csv = $this->makeCsv([
+            ['sku', 'name', 'barcode', 'category', 'brand', 'unit', 'cost_price', 'selling_price', 'tax_rate', 'minimum_stock', 'initial_quantity', 'opening_unit_cost'],
+            ['CSV-SAFE-001', 'Safe Import Product', 'SAFE-IMPORT-001', 'Imported', 'Imported Brand', 'btl', '5.5', '9.5', '0', '1', '12', '5.5'],
+        ]);
+
+        $importer = app(CsvDataImportService::class);
+        $preview = $importer->preview($company->id, 'products', $csv, $warehouse->id);
+        $result = $importer->import($company->id, 'products', $csv, $warehouse->id);
+
+        $this->assertSame(1, $preview['valid']);
+        $this->assertSame(1, $result['created']);
+        $product = Product::query()->where('company_id', $company->id)->where('sku', 'CSV-SAFE-001')->firstOrFail();
+        $this->assertSame('12.0000', app(InventoryService::class)->getBalance($company->id, $warehouse->id, $product->id));
+        $this->assertSame(1, $importer->preview($company->id, 'products', $csv, $warehouse->id)['duplicates']);
     }
 
     #[Test]
