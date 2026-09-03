@@ -26,6 +26,13 @@ class Branch extends Model
         'address',
         'city',
         'currency',
+        'receipt_shop_name',
+        'receipt_tax_number',
+        'receipt_gst_label',
+        'receipt_header',
+        'receipt_footer',
+        'receipt_show_address',
+        'receipt_show_phone',
         'is_active',
     ];
 
@@ -36,6 +43,8 @@ class Branch extends Model
     {
         return [
             'is_active' => 'boolean',
+            'receipt_show_address' => 'boolean',
+            'receipt_show_phone' => 'boolean',
         ];
     }
 

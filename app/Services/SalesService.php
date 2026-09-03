@@ -27,6 +27,7 @@ class SalesService
         private readonly InventoryService $inventoryService,
         private readonly NumberSequenceService $numberSequenceService,
         private readonly CustomerLedgerService $customerLedgerService,
+        private readonly ReceiptProfileResolver $receiptProfileResolver,
     ) {}
 
     public function createSale(
@@ -541,6 +542,10 @@ class SalesService
             'paid_total' => $this->formatDecimal($paymentTotal),
             'balance_due' => $this->formatDecimal($balanceDue),
             'completed_at' => $attributes['completed_at'] ?? now(),
+            'receipt_snapshot' => $this->receiptProfileResolver->resolve(
+                $sale->company()->firstOrFail(),
+                Branch::query()->where('company_id', $sale->company_id)->findOrFail($sale->branch_id),
+            ),
         ])->save();
     }
 

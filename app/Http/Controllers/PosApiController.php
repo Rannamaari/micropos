@@ -16,6 +16,7 @@ use App\Services\CustomerLedgerService;
 use App\Services\InventoryQueryService;
 use App\Services\NumberSequenceService;
 use App\Services\ProductSearchService;
+use App\Services\ReceiptProfileResolver;
 use App\Services\SalesService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -45,6 +46,7 @@ class PosApiController extends Controller
         private readonly CustomerLedgerService $customerLedgerService,
         private readonly NumberSequenceService $numberSequenceService,
         private readonly PosUserContextResolver $posUserContextResolver,
+        private readonly ReceiptProfileResolver $receiptProfileResolver,
     ) {}
 
     public function searchProducts(Request $request): JsonResponse
@@ -706,6 +708,7 @@ class PosApiController extends Controller
     private function transformSale(Sale $sale): array
     {
         $sale->loadMissing(['items.product.primaryBarcode', 'items.product.unit', 'payments', 'customer', 'returns.items', 'company', 'branch', 'warehouse', 'creator', 'canceller']);
+        $receipt = $sale->receipt_snapshot ?: $this->receiptProfileResolver->resolve($sale->company, $sale->branch);
         $returnedQuantities = SaleReturnItem::query()
             ->selectRaw('sale_item_id, COALESCE(SUM(quantity), 0) as returned_quantity')
             ->whereIn('sale_item_id', $sale->items->pluck('id'))
@@ -735,6 +738,7 @@ class PosApiController extends Controller
                 'receipt_show_address' => $sale->company?->receipt_show_address ?? true,
                 'receipt_show_phone' => $sale->company?->receipt_show_phone ?? true,
             ],
+            'receipt' => $receipt,
             'branch' => [
                 'id' => $sale->branch?->id,
                 'name' => $sale->branch?->name,

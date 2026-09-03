@@ -43,6 +43,7 @@ class Sale extends Model
         'completed_at',
         'voided_at',
         'cancelled_at',
+        'receipt_snapshot',
     ];
 
     /**
@@ -62,6 +63,7 @@ class Sale extends Model
             'completed_at' => 'datetime',
             'voided_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'receipt_snapshot' => 'array',
         ];
     }
 

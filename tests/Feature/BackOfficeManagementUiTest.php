@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\PurchaseService;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -45,6 +46,18 @@ class BackOfficeManagementUiTest extends TestCase
         $this->actingAs($user)
             ->get('/admin')
             ->assertOk();
+    }
+
+    #[Test]
+    public function authorized_admin_can_open_branch_receipt_settings(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $admin = User::query()->where('email', 'admin@micropos.local')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get('/admin/receipt-settings')
+            ->assertOk()
+            ->assertSee('Branch Receipt Settings');
     }
 
     #[Test]
