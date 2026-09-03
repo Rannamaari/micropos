@@ -25,9 +25,9 @@ class ProductsTable
                 TextColumn::make('name')
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->where(function (Builder $nested) use ($search): void {
-                            $nested->where('products.name', 'like', "%{$search}%")
-                                ->orWhere('products.sku', 'like', "%{$search}%")
-                                ->orWhereHas('barcodes', fn (Builder $barcodeQuery): Builder => $barcodeQuery->where('barcode', 'like', "%{$search}%"));
+                            $nested->whereLike('products.name', "%{$search}%", caseSensitive: false)
+                                ->orWhereLike('products.sku', "%{$search}%", caseSensitive: false)
+                                ->orWhereHas('barcodes', fn (Builder $barcodeQuery): Builder => $barcodeQuery->whereLike('barcode', "%{$search}%", caseSensitive: false));
                         });
                     })
                     ->sortable(),

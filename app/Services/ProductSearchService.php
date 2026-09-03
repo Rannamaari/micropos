@@ -87,7 +87,7 @@ class ProductSearchService
         $likeTerm = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query).'%';
 
         return $this->baseSearchQuery($companyId, $filters, $activeOnly)
-            ->where('products.name', 'like', $likeTerm)
+            ->whereLike('products.name', $likeTerm, caseSensitive: false)
             ->orderBy('products.name');
     }
 

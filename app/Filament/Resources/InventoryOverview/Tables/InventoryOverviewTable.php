@@ -38,9 +38,9 @@ class InventoryOverviewTable
                         $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search).'%';
 
                         return $query->where(function (Builder $nested) use ($like): void {
-                            $nested->where('products.name', 'like', $like)
-                                ->orWhere('products.sku', 'like', $like)
-                                ->orWhere('product_barcodes.barcode', 'like', $like);
+                            $nested->whereLike('products.name', $like, caseSensitive: false)
+                                ->orWhereLike('products.sku', $like, caseSensitive: false)
+                                ->orWhereLike('product_barcodes.barcode', $like, caseSensitive: false);
                         });
                     })
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('products.name', $direction)),

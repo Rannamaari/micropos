@@ -103,9 +103,9 @@ class CountStock extends Page implements HasTable
 
                         return $query->where(function (Builder $nested) use ($like): void {
                             $nested->whereHas('product', function (Builder $productQuery) use ($like): void {
-                                $productQuery->where('name', 'like', $like)
-                                    ->orWhere('sku', 'like', $like)
-                                    ->orWhereHas('barcodes', fn (Builder $barcodeQuery): Builder => $barcodeQuery->where('barcode', 'like', $like));
+                                $productQuery->whereLike('name', $like, caseSensitive: false)
+                                    ->orWhereLike('sku', $like, caseSensitive: false)
+                                    ->orWhereHas('barcodes', fn (Builder $barcodeQuery): Builder => $barcodeQuery->whereLike('barcode', $like, caseSensitive: false));
                             });
                         });
                     })

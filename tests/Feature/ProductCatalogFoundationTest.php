@@ -280,7 +280,7 @@ class ProductCatalogFoundationTest extends TestCase
     {
         $product = Product::factory()->create(['unit_id' => Unit::factory()->create()->id, 'name' => 'Coca Cola Zero']);
 
-        $results = Product::searchForCompany($product->company_id, 'Coca')->get();
+        $results = Product::searchForCompany($product->company_id, 'cOcA')->get();
 
         $this->assertTrue($results->contains('id', $product->id));
     }

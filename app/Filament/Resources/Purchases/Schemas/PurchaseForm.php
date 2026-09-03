@@ -166,9 +166,9 @@ class PurchaseForm
             ->where('is_active', true)
             ->where(function ($query) use ($term): void {
                 $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $term).'%';
-                $query->where('name', 'like', $like)
-                    ->orWhere('sku', 'like', $like)
-                    ->orWhereHas('barcodes', fn ($barcodeQuery) => $barcodeQuery->where('barcode', 'like', $like));
+                $query->whereLike('name', $like, caseSensitive: false)
+                    ->orWhereLike('sku', $like, caseSensitive: false)
+                    ->orWhereHas('barcodes', fn ($barcodeQuery) => $barcodeQuery->whereLike('barcode', $like, caseSensitive: false));
             })
             ->orderBy('name')
             ->limit(20)
