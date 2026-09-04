@@ -206,6 +206,11 @@ class InventoryManagementUiTest extends TestCase
             ->assertSee('Scanner Cola')
             ->assertDontSee($nameOnlyProduct->name)
             ->assertDontSee($barcodeOnlyProduct->name);
+
+        $component->set('tableSearch', '')
+            ->set('tableColumnSearches.name', 'Scanner Cola')
+            ->assertSee('Scanner Cola')
+            ->assertDontSee($nameOnlyProduct->name);
         $component->set('tableSearch', '1234567890')->assertSee('Scanner Cola');
     }
 
