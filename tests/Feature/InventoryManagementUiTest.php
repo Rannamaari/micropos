@@ -168,7 +168,7 @@ class InventoryManagementUiTest extends TestCase
             'company_id' => $warehouse->company_id,
             'unit_id' => Unit::factory()->create()->id,
             'name' => 'Scanner Cola',
-            'sku' => 'SCN-COLA',
+            'sku' => 'SCN-002-COLA',
         ]);
 
         ProductBarcode::factory()->create([
@@ -181,7 +181,8 @@ class InventoryManagementUiTest extends TestCase
         $component = Livewire::actingAs($user)->test(ListInventoryOverview::class);
 
         $component->set('tableSearch', 'Scanner Cola')->assertSee('Scanner Cola');
-        $component->set('tableSearch', 'SCN-COLA')->assertSee('Scanner Cola');
+        $component->set('tableSearch', 'SCN-002-COLA')->assertSee('Scanner Cola');
+        $component->set('tableSearch', '002')->assertSee('Scanner Cola');
         $component->set('tableSearch', '1234567890')->assertSee('Scanner Cola');
     }
 

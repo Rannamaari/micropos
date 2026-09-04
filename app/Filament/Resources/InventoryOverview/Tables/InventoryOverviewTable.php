@@ -34,15 +34,6 @@ class InventoryOverviewTable
                 TextColumn::make('name')
                     ->label('Product')
                     ->description(fn (Product $record): string => 'SKU: '.$record->sku.($record->primary_barcode ? ' | Barcode: '.$record->primary_barcode : ''))
-                    ->searchable(query: function (Builder $query, string $search): Builder {
-                        $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search).'%';
-
-                        return $query->where(function (Builder $nested) use ($like): void {
-                            $nested->whereLike('products.name', $like, caseSensitive: false)
-                                ->orWhereLike('products.sku', $like, caseSensitive: false)
-                                ->orWhereLike('product_barcodes.barcode', $like, caseSensitive: false);
-                        });
-                    })
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('products.name', $direction)),
                 TextColumn::make('sku')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -85,6 +76,15 @@ class InventoryOverviewTable
                     ->money($currency)
                     ->sortable(),
             ])
+            ->searchUsing(function (Builder $query, string $search): void {
+                $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search).'%';
+
+                $query->where(function (Builder $nested) use ($like): void {
+                    $nested->whereLike('products.name', $like, caseSensitive: false)
+                        ->orWhereLike('products.sku', $like, caseSensitive: false)
+                        ->orWhereLike('product_barcodes.barcode', $like, caseSensitive: false);
+                });
+            })
             ->filters([
                 SelectFilter::make('warehouse_id')
                     ->label('Warehouse')
