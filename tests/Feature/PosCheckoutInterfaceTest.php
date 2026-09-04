@@ -194,6 +194,7 @@ class PosCheckoutInterfaceTest extends TestCase
         app(InventoryService::class)->setOpeningStock($warehouse->company_id, $warehouse->id, $product->id, 10, 6);
 
         $cashier = $this->userWithRole('cashier', $warehouse);
+        $this->openShift($cashier);
 
         $payload = [
             'client_transaction_uuid' => 'pos-sale-1001',
@@ -232,6 +233,25 @@ class PosCheckoutInterfaceTest extends TestCase
     }
 
     #[Test]
+    public function payment_completion_requires_an_open_cashier_shift(): void
+    {
+        [$warehouse, $product] = $this->warehouseAndProduct(sellingPrice: 10);
+        app(InventoryService::class)->setOpeningStock($warehouse->company_id, $warehouse->id, $product->id, 2, 6);
+        $cashier = $this->userWithRole('cashier', $warehouse);
+
+        $this->actingAs($cashier)
+            ->postJson('/pos/api/sales', [
+                'client_transaction_uuid' => 'shift-required-1',
+                'items' => [['product_id' => $product->id, 'quantity' => 1]],
+                'payments' => [['payment_method' => 'cash', 'amount' => 10]],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.shift.0', 'Open a cashier shift before completing a sale.');
+
+        $this->assertDatabaseCount('sales', 0);
+    }
+
+    #[Test]
     public function insufficient_stock_returns_structured_validation_error(): void
     {
         [$warehouse, $product] = $this->warehouseAndProduct(sellingPrice: 10);
@@ -267,6 +287,7 @@ class PosCheckoutInterfaceTest extends TestCase
         [$warehouse, $product] = $this->warehouseAndProduct(sellingPrice: 10);
         app(InventoryService::class)->setOpeningStock($warehouse->company_id, $warehouse->id, $product->id, 10, 6);
         $manager = $this->userWithRole('manager', $warehouse);
+        $this->openShift($manager);
         $walkIn = Customer::factory()->walkIn()->create(['company_id' => $warehouse->company_id]);
 
         $this->actingAs($manager)
@@ -296,6 +317,7 @@ class PosCheckoutInterfaceTest extends TestCase
         app(InventoryService::class)->setOpeningStock($warehouse->company_id, $warehouse->id, $product->id, 10, 6);
 
         $cashier = $this->userWithRole('cashier', $warehouse);
+        $this->openShift($cashier);
         $customer = Customer::factory()->create(['company_id' => $warehouse->company_id]);
         $extraProduct = Product::factory()->create([
             'company_id' => $warehouse->company_id,
@@ -489,6 +511,7 @@ class PosCheckoutInterfaceTest extends TestCase
         app(InventoryService::class)->setOpeningStock($warehouse->company_id, $warehouse->id, $product->id, 10, 6);
         $cashier = $this->userWithRole('cashier', $warehouse);
         $manager = $this->userWithRole('manager', $warehouse);
+        $this->openShift($manager);
 
         $basePayload = [
             'client_transaction_uuid' => 'override-check-1',
@@ -524,6 +547,7 @@ class PosCheckoutInterfaceTest extends TestCase
         [$warehouse, $product] = $this->warehouseAndProduct(sellingPrice: 10);
         app(InventoryService::class)->setOpeningStock($warehouse->company_id, $warehouse->id, $product->id, 10, 6);
         $manager = $this->userWithRole('manager', $warehouse);
+        $this->openShift($manager);
 
         $saleData = $this->actingAs($manager)
             ->postJson('/pos/api/sales', [
@@ -804,6 +828,13 @@ class PosCheckoutInterfaceTest extends TestCase
         $user->assignRole(Role::findByName($role, 'web'));
 
         return $user;
+    }
+
+    private function openShift(User $user): void
+    {
+        $this->actingAs($user)
+            ->postJson('/pos/api/shifts/open', ['opening_cash' => 0])
+            ->assertOk();
     }
 
     /**

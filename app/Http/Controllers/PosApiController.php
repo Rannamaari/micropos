@@ -144,7 +144,7 @@ class PosApiController extends Controller
 
         return $this->executeSaleMutation(function () use ($request, $context): Sale {
             $validated = $this->validateSalePayload($request, $context, false, false);
-            $shift = $this->cashierShiftService->activeFor($context, $request->user()->id);
+            $shift = $this->requireActiveShift($context, $request);
 
             $sale = $this->salesService->createSale(
                 $context['company_id'],
@@ -309,7 +309,7 @@ class PosApiController extends Controller
         return $this->executeSaleMutation(function () use ($request, $sale): Sale {
             $context = $this->posContext($request, 'sales.complete');
             $validated = $this->validateSalePayload($request, $context, false, false);
-            $shift = $this->cashierShiftService->activeFor($context, $request->user()->id);
+            $shift = $this->requireActiveShift($context, $request);
 
             $completed = $this->salesService->completeHeldSale(
                 $sale->id,
@@ -701,6 +701,19 @@ class PosApiController extends Controller
             'opened_at' => $shift->opened_at?->toIso8601String(),
             'closed_at' => $shift->closed_at?->toIso8601String(),
         ];
+    }
+
+    private function requireActiveShift(array $context, Request $request): CashierShift
+    {
+        $shift = $this->cashierShiftService->activeFor($context, $request->user()->id);
+
+        if (! $shift) {
+            throw ValidationException::withMessages([
+                'shift' => ['Open a cashier shift before completing a sale.'],
+            ]);
+        }
+
+        return $shift;
     }
 
     private function transformProductForPosFromBalance(Product $product, ?string $balance, string $branchId): array

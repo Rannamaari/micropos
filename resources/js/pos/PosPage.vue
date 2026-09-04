@@ -28,7 +28,7 @@ const shiftModalMode = ref(null);
 
 store.hydrate(props.bootstrap);
 
-const canOpenPayment = computed(() => store.items.length > 0);
+const canOpenPayment = computed(() => store.hasActiveShift && store.items.length > 0);
 
 function focusSearch() {
     searchRef.value?.focusInput();
@@ -149,9 +149,14 @@ onBeforeUnmount(() => {
                 </ul>
             </div>
 
-            <div class="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(420px,0.8fr)]">
+            <div v-if="!store.hasActiveShift" class="pos-card rounded-[28px] border border-[var(--pos-accent)]/35 bg-[var(--pos-accent)]/10 p-4 text-sm text-[var(--pos-paper)]">
+                <strong>POS is locked until a cashier shift is opened.</strong>
+                <span class="ml-1 text-[var(--pos-muted)]">Use Open Shift above, enter the opening cash, then start scanning.</span>
+            </div>
+
+            <div class="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(420px,0.8fr)]" :class="{ 'pointer-events-none opacity-45': !store.hasActiveShift }">
                 <section class="pos-card flex min-h-[40rem] flex-col rounded-[32px] p-4 md:p-6">
-                    <ProductSearch ref="searchRef" v-model="store.searchInputValue" :disabled="store.loading.completingSale" @search-input="onSearchInput" @submit="store.scanOrLookup(store.searchInputValue)" />
+                    <ProductSearch ref="searchRef" v-model="store.searchInputValue" :disabled="store.loading.completingSale || !store.hasActiveShift" @search-input="onSearchInput" @submit="store.scanOrLookup(store.searchInputValue)" />
                     <ProductSearchResults
                         :results="store.searchResults"
                         :selected-index="store.selectedSearchIndex"
