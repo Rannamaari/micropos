@@ -34,6 +34,7 @@ class InventoryOverviewTable
                 TextColumn::make('name')
                     ->label('Product')
                     ->description(fn (Product $record): string => 'SKU: '.$record->sku.($record->primary_barcode ? ' | Barcode: '.$record->primary_barcode : ''))
+                    ->searchable()
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('products.name', $direction)),
                 TextColumn::make('sku')
                     ->toggleable(isToggledHiddenByDefault: true),
