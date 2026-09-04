@@ -36,7 +36,12 @@ class InventoryOverviewTable
                     ->description(fn (Product $record): string => 'SKU: '.$record->sku.($record->primary_barcode ? ' | Barcode: '.$record->primary_barcode : ''))
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('products.name', $direction)),
                 TextColumn::make('sku')
-                    ->searchable()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereRaw(
+                            'LOWER(products.sku) LIKE ?',
+                            ['%'.strtolower($search).'%'],
+                        );
+                    })
                     ->sortable(),
                 TextColumn::make('primary_barcode')
                     ->label('Primary Barcode')
