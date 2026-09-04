@@ -3,6 +3,10 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Widgets\OperationsOverview;
+use App\Filament\Widgets\BestSellersTable;
+use App\Filament\Widgets\BranchSalesTable;
+use App\Filament\Widgets\DailyBranchSalesChart;
+use App\Filament\Widgets\LowStockTable;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -50,6 +54,10 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 AccountWidget::class,
                 OperationsOverview::class,
+                DailyBranchSalesChart::class,
+                BranchSalesTable::class,
+                BestSellersTable::class,
+                LowStockTable::class,
             ])
             ->middleware([
                 EncryptCookies::class,

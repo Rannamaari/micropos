@@ -32,6 +32,7 @@ class OperationsOverview extends StatsOverviewWidget
         $todaySalesQuery = Sale::query()
             ->where('company_id', $companyId)
             ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->whereIn('status', ['completed', 'refunded', 'partially_refunded'])
             ->whereDate('sale_date', today());
 
         $todaySales = (float) $todaySalesQuery->sum('grand_total');
@@ -71,6 +72,7 @@ class OperationsOverview extends StatsOverviewWidget
         $customerReceivables = (float) Sale::query()
             ->where('company_id', $companyId)
             ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->whereIn('status', ['completed', 'refunded', 'partially_refunded'])
             ->sum('balance_due');
 
         $supplierPayables = (float) Purchase::query()
