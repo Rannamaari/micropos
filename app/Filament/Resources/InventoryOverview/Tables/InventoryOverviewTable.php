@@ -77,14 +77,11 @@ class InventoryOverviewTable
                     ->money($currency)
                     ->sortable(),
             ])
+            ->searchPlaceholder('Search SKU')
             ->searchUsing(function (Builder $query, string $search): void {
                 $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search).'%';
 
-                $query->where(function (Builder $nested) use ($like): void {
-                    $nested->whereLike('products.name', $like, caseSensitive: false)
-                        ->orWhereLike('products.sku', $like, caseSensitive: false)
-                        ->orWhereLike('product_barcodes.barcode', $like, caseSensitive: false);
-                });
+                $query->whereLike('products.sku', $like, caseSensitive: false);
             })
             ->filters([
                 SelectFilter::make('warehouse_id')

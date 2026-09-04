@@ -160,7 +160,7 @@ class InventoryManagementUiTest extends TestCase
     }
 
     #[Test]
-    public function inventory_overview_search_supports_name_sku_and_barcode(): void
+    public function inventory_overview_searches_sku_without_matching_product_names_or_barcodes(): void
     {
         $warehouse = Warehouse::factory()->create();
         $user = $this->userWithRole('admin', $warehouse);
@@ -178,11 +178,34 @@ class InventoryManagementUiTest extends TestCase
             'is_primary' => true,
         ]);
 
+        $nameOnlyProduct = Product::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'unit_id' => Unit::factory()->create()->id,
+            'name' => '002 only in product name',
+            'sku' => 'NAME-ONLY',
+        ]);
+
+        $barcodeOnlyProduct = Product::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'unit_id' => Unit::factory()->create()->id,
+            'name' => '002 only in barcode',
+            'sku' => 'BARCODE-ONLY',
+        ]);
+
+        ProductBarcode::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'product_id' => $barcodeOnlyProduct->id,
+            'barcode' => 'BARCODE-002',
+            'is_primary' => true,
+        ]);
+
         $component = Livewire::actingAs($user)->test(ListInventoryOverview::class);
 
-        $component->set('tableSearch', 'Scanner Cola')->assertSee('Scanner Cola');
         $component->set('tableSearch', 'SCN-002-COLA')->assertSee('Scanner Cola');
-        $component->set('tableSearch', '002')->assertSee('Scanner Cola');
+        $component->set('tableSearch', '002')
+            ->assertSee('Scanner Cola')
+            ->assertDontSee($nameOnlyProduct->name)
+            ->assertDontSee($barcodeOnlyProduct->name);
         $component->set('tableSearch', '1234567890')->assertSee('Scanner Cola');
     }
 
