@@ -34,10 +34,10 @@ class InventoryOverviewTable
                 TextColumn::make('name')
                     ->label('Product')
                     ->description(fn (Product $record): string => 'SKU: '.$record->sku.($record->primary_barcode ? ' | Barcode: '.$record->primary_barcode : ''))
-                    ->searchable()
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('products.name', $direction)),
                 TextColumn::make('sku')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('primary_barcode')
                     ->label('Primary Barcode')
                     ->toggleable(),
@@ -78,11 +78,6 @@ class InventoryOverviewTable
                     ->sortable(),
             ])
             ->searchPlaceholder('Search SKU')
-            ->searchUsing(function (Builder $query, string $search): void {
-                $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search).'%';
-
-                $query->whereLike('products.sku', $like, caseSensitive: false);
-            })
             ->filters([
                 SelectFilter::make('warehouse_id')
                     ->label('Warehouse')
