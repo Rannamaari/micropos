@@ -58,6 +58,13 @@ class Product extends Model
 
     protected static function booted(): void
     {
+        static::deleting(function (Product $product): void {
+            // SQLite test databases cannot alter this foreign key; production uses its cascade constraint.
+            if ($product->getConnection()->getDriverName() === 'sqlite') {
+                $product->branchPrices()->delete();
+            }
+        });
+
         static::saving(function (Product $product): void {
             foreach (['cost_price', 'selling_price', 'wholesale_price', 'tax_rate', 'minimum_stock'] as $field) {
                 $value = $product->{$field};

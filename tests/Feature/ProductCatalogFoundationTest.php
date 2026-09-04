@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Company;
+use App\Models\Branch;
 use App\Models\Product;
 use App\Models\ProductBarcode;
+use App\Models\ProductBranchPrice;
 use App\Models\Unit;
 use App\Models\Warehouse;
 use App\Services\CsvDataImportService;
@@ -128,6 +130,27 @@ class ProductCatalogFoundationTest extends TestCase
         ]);
 
         $this->assertCount(2, $product->fresh()->barcodes);
+    }
+
+    #[Test]
+    public function deleting_an_unused_product_removes_its_branch_prices(): void
+    {
+        $company = Company::factory()->create();
+        $branch = Branch::factory()->create(['company_id' => $company->id]);
+        $product = Product::factory()->create(['company_id' => $company->id, 'unit_id' => Unit::factory()->create()->id]);
+        $branchPrice = ProductBranchPrice::query()->create([
+            'company_id' => $company->id,
+            'branch_id' => $branch->id,
+            'product_id' => $product->id,
+            'currency' => $branch->currency,
+            'cost_price' => 5,
+            'selling_price' => 10,
+        ]);
+
+        $product->delete();
+
+        $this->assertDatabaseMissing('products', ['id' => $product->id]);
+        $this->assertDatabaseMissing('product_branch_prices', ['id' => $branchPrice->id]);
     }
 
     #[Test]
