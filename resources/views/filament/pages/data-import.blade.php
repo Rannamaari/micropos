@@ -2,7 +2,7 @@
     <div class="space-y-6">
         <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-white/5">
             <h2 class="text-lg font-semibold">Safe CSV import</h2>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Download a template, upload it, review every issue, then import only rows marked ready. Existing records are never overwritten.</p>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">For products, only SKU and name are required. Blank fields use safe defaults, and a blank or <code>0</code> barcode means no barcode. Review every issue before importing; existing records are never overwritten.</p>
         </div>
 
         <form wire:submit="previewUpload" class="space-y-4 rounded-xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-white/5">

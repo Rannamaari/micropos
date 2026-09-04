@@ -112,13 +112,19 @@ class CsvDataImportService
     /** @return list<array<string,string|int>> */
     private function read(string $type, string $path): array
     {
-        $required = self::HEADERS[$type] ?? throw new InvalidArgumentException('Unsupported import type.');
+        $knownHeaders = self::HEADERS[$type] ?? throw new InvalidArgumentException('Unsupported import type.');
         if (! is_file($path) || ! is_readable($path)) throw new InvalidArgumentException('CSV file is not readable.');
 
         $file = new SplFileObject($path);
         $file->setFlags(SplFileObject::READ_CSV | SplFileObject::SKIP_EMPTY);
         $headers = array_map(fn ($value) => strtolower(trim((string) $value)), $file->fgetcsv() ?: []);
-        foreach (array_slice($required, 0, match ($type) { 'products' => 8, 'categories' => 1, default => 2 }) as $header) {
+        $requiredHeaders = match ($type) {
+            'products' => ['sku', 'name'],
+            'categories' => ['name'],
+            default => ['code', 'name'],
+        };
+
+        foreach ($requiredHeaders as $header) {
             if (! in_array($header, $headers, true)) throw new InvalidArgumentException("Missing required CSV column: {$header}");
         }
 
@@ -132,7 +138,11 @@ class CsvDataImportService
             if (collect($values)->every(fn ($value) => trim((string) $value) === '')) continue;
             $data = array_combine($headers, $values);
             if ($data === false) continue;
-            $rows[] = array_map(fn ($value) => trim((string) $value), $data) + ['row' => $line];
+            $rows[] = array_replace(
+                array_fill_keys($knownHeaders, ''),
+                array_map(fn ($value) => trim((string) $value), $data),
+                ['row' => $line],
+            );
         }
         return $rows;
     }
@@ -141,16 +151,24 @@ class CsvDataImportService
     private function validateRow(string $companyId, string $type, array $row, array &$seen, ?string $warehouseId): array
     {
         $key = match ($type) { 'products' => $row['sku'] ?? '', default => $row['code'] ?: $row['name'] };
-        if ($key === '' || ($type === 'products' && (($row['name'] ?? '') === '' || ($row['barcode'] ?? '') === ''))) return ['status' => 'invalid', 'message' => 'Required fields are missing.'];
+        if ($key === '' || ($type === 'products' && ($row['name'] ?? '') === '')) return ['status' => 'invalid', 'message' => 'Required fields are missing.'];
         if (isset($seen[$type.':'.$key])) return ['status' => 'duplicate', 'message' => "Duplicate {$key} in this CSV; it will not be imported."];
         $seen[$type.':'.$key] = true;
 
         if ($type === 'products') {
-            if (isset($seen['products-barcode:'.$row['barcode']])) return ['status' => 'duplicate', 'message' => "Duplicate barcode '{$row['barcode']}' in this CSV; it will not be imported."];
-            $seen['products-barcode:'.$row['barcode']] = true;
-            if (! Unit::query()->where('short_name', $row['unit'] ?? '')->exists()) return ['status' => 'invalid', 'message' => "Unknown unit '{$row['unit']}'."];
-            if (! is_numeric($row['cost_price']) || ! is_numeric($row['selling_price']) || (float) $row['cost_price'] < 0 || (float) $row['selling_price'] < 0) return ['status' => 'invalid', 'message' => 'Prices must be non-negative numbers.'];
-            if (Product::query()->where('company_id', $companyId)->where('sku', $row['sku'])->exists() || ProductBarcode::query()->where('company_id', $companyId)->where('barcode', $row['barcode'])->exists()) return ['status' => 'duplicate', 'message' => 'SKU or barcode already exists; it will not be overwritten.'];
+            $barcode = $this->barcode($row);
+
+            if ($barcode && isset($seen['products-barcode:'.$barcode])) return ['status' => 'duplicate', 'message' => "Duplicate barcode '{$barcode}' in this CSV; it will not be imported."];
+            if ($barcode) $seen['products-barcode:'.$barcode] = true;
+
+            $unit = $this->unitShortName($row);
+            if (filled($row['unit']) && ! Unit::query()->whereRaw('LOWER(short_name) = ?', [strtolower($unit)])->exists()) return ['status' => 'invalid', 'message' => "Unknown unit '{$row['unit']}'."];
+
+            foreach (['cost_price', 'selling_price', 'tax_rate', 'minimum_stock', 'opening_unit_cost'] as $field) {
+                if (filled($row[$field]) && (! is_numeric($row[$field]) || (float) $row[$field] < 0)) return ['status' => 'invalid', 'message' => "{$field} must be a non-negative number."];
+            }
+
+            if (Product::query()->where('company_id', $companyId)->where('sku', $row['sku'])->exists() || ($barcode && ProductBarcode::query()->where('company_id', $companyId)->where('barcode', $barcode)->exists())) return ['status' => 'duplicate', 'message' => 'SKU or barcode already exists; it will not be overwritten.'];
             if (filled($row['initial_quantity'] ?? null) && (! $warehouseId || ! is_numeric($row['initial_quantity']) || (float) $row['initial_quantity'] < 0)) return ['status' => 'invalid', 'message' => 'Opening quantity requires a warehouse and a non-negative number.'];
         } elseif ($type === 'categories' && (Category::query()->where('company_id', $companyId)->where('name', $row['name'])->exists() || (filled($row['code']) && Category::query()->where('company_id', $companyId)->where('code', $row['code'])->exists()))) {
             return ['status' => 'duplicate', 'message' => 'Category name or code already exists; it will not be overwritten.'];
@@ -168,14 +186,40 @@ class CsvDataImportService
     {
         $category = filled($row['category'] ?? null) ? Category::query()->firstOrCreate(['company_id' => $companyId, 'name' => $row['category']], ['is_active' => true]) : null;
         $brand = filled($row['brand'] ?? null) ? Brand::query()->firstOrCreate(['company_id' => $companyId, 'name' => $row['brand']], ['is_active' => true]) : null;
-        $unit = Unit::query()->where('short_name', $row['unit'])->firstOrFail();
+        $unit = $this->resolveUnit($row);
         $product = Product::query()->create([
             'company_id' => $companyId, 'category_id' => $category?->id, 'brand_id' => $brand?->id, 'unit_id' => $unit->id,
-            'sku' => $row['sku'], 'name' => $row['name'], 'cost_price' => $row['cost_price'], 'selling_price' => $row['selling_price'],
+            'sku' => $row['sku'], 'name' => $row['name'], 'cost_price' => $row['cost_price'] ?: 0, 'selling_price' => $row['selling_price'] ?: 0,
             'tax_rate' => $row['tax_rate'] ?: 0, 'minimum_stock' => $row['minimum_stock'] ?: 0, 'track_inventory' => true, 'is_active' => true,
         ]);
-        ProductBarcode::query()->create(['company_id' => $companyId, 'product_id' => $product->id, 'barcode' => $row['barcode'], 'is_primary' => true]);
+        if ($barcode = $this->barcode($row)) ProductBarcode::query()->create(['company_id' => $companyId, 'product_id' => $product->id, 'barcode' => $barcode, 'is_primary' => true]);
         if ($warehouseId && (float) ($row['initial_quantity'] ?? 0) > 0) app(InventoryService::class)->setOpeningStock($companyId, $warehouseId, $product->id, $row['initial_quantity'], $row['opening_unit_cost'] ?: $row['cost_price']);
+    }
+
+    /** @param array<string,string|int> $row */
+    private function barcode(array $row): ?string
+    {
+        $barcode = trim((string) ($row['barcode'] ?? ''));
+
+        return $barcode === '' || $barcode === '0' ? null : $barcode;
+    }
+
+    /** @param array<string,string|int> $row */
+    private function unitShortName(array $row): string
+    {
+        return strtolower(trim((string) ($row['unit'] ?? ''))) ?: 'pcs';
+    }
+
+    /** @param array<string,string|int> $row */
+    private function resolveUnit(array $row): Unit
+    {
+        $shortName = $this->unitShortName($row);
+        $unit = Unit::query()->whereRaw('LOWER(short_name) = ?', [$shortName])->first();
+
+        if ($unit) return $unit;
+
+        // A compact product CSV defaults to pieces, even for a new empty catalog.
+        return Unit::query()->create(['name' => 'Piece', 'short_name' => 'pcs', 'precision' => 0, 'is_active' => true]);
     }
 
     /** @param array<string,string|int> $row */

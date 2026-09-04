@@ -563,6 +563,32 @@ class ProductCatalogFoundationTest extends TestCase
     }
 
     #[Test]
+    public function csv_data_import_allows_optional_product_columns_and_zero_placeholder_barcodes(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $company = Company::query()->where('name', 'Micro POS Demo Company')->firstOrFail();
+        $warehouse = Warehouse::query()->where('company_id', $company->id)->firstOrFail();
+        $csv = $this->makeCsv([
+            ['sku', 'name', 'barcode', 'category', 'brand', 'selling_price', 'initial_quantity'],
+            ['266', 'Anke Bracelet gold platted', '0', 'system', 'bracelet', '25', '4'],
+            ['267', 'Glass Shark', '', 'system', 'bracelet', '10', '22'],
+        ]);
+
+        $importer = app(CsvDataImportService::class);
+        $preview = $importer->preview($company->id, 'products', $csv, $warehouse->id);
+        $result = $importer->import($company->id, 'products', $csv, $warehouse->id);
+
+        $this->assertSame(2, $preview['valid']);
+        $this->assertSame(2, $result['created']);
+        $product = Product::query()->where('company_id', $company->id)->where('sku', '266')->firstOrFail();
+        $this->assertSame('0.0000', $product->cost_price);
+        $this->assertSame('25.0000', $product->selling_price);
+        $this->assertNull($product->primaryBarcode);
+        $this->assertSame('4.0000', app(InventoryService::class)->getBalance($company->id, $warehouse->id, $product->id));
+    }
+
+    #[Test]
     public function large_product_data_can_be_paginated_without_loading_the_full_catalog(): void
     {
         $this->seed(DatabaseSeeder::class);
