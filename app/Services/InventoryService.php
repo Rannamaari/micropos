@@ -54,7 +54,7 @@ class InventoryService
                 $product,
                 $normalizedQuantity,
                 StockMovementType::Opening,
-                $unitCost,
+                $unitCost !== null ? (float) $unitCost : null,
                 $createdBy,
                 $occurredAt,
                 null,

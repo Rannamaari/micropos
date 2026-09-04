@@ -12,6 +12,7 @@ import HeldSalesModal from './components/pos/HeldSalesModal.vue';
 import SaleCompleteModal from './components/pos/SaleCompleteModal.vue';
 import SaleLookupModal from './components/pos/SaleLookupModal.vue';
 import ShortcutHelpModal from './components/pos/ShortcutHelpModal.vue';
+import CashierShiftModal from './components/pos/CashierShiftModal.vue';
 
 const props = defineProps({
     bootstrap: {
@@ -23,6 +24,7 @@ const props = defineProps({
 const store = usePosStore();
 const searchRef = ref(null);
 const searchDebounce = ref(null);
+const shiftModalMode = ref(null);
 
 store.hydrate(props.bootstrap);
 
@@ -94,6 +96,31 @@ async function signOut() {
     }
 }
 
+function closeShift() {
+    if (store.dirty) {
+        window.alert('Finish, hold, or start a new sale before closing the cashier shift. The current cart is not part of EOD yet.');
+        return;
+    }
+
+    shiftModalMode.value = 'close';
+}
+
+function shiftSaved(response) {
+    if (shiftModalMode.value === 'open') {
+        store.setActiveShift(response.data);
+        shiftModalMode.value = null;
+        store.notify(`Shift ${response.data.shift_number} opened.`, 'success');
+        focusSearch();
+        return;
+    }
+
+    store.setActiveShift(null);
+    shiftModalMode.value = null;
+    store.notify('Shift closed and EOD report generated.', 'success');
+    window.open(response.print_url, '_blank', 'width=900,height=900');
+    focusSearch();
+}
+
 watch(() => store.items.length, () => {
     focusSearch();
 });
@@ -113,7 +140,7 @@ onBeforeUnmount(() => {
 <template>
     <div class="pos-shell min-h-screen p-4 text-[var(--pos-paper)] md:p-6">
         <div class="mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1800px] flex-col gap-4">
-            <PosHeader @shortcuts="store.shortcutModalOpen = true" @held-sales="store.heldSalesModalOpen = true; store.loadHeldSales()" @sale-lookup="store.prepareSalesHistory()" @sign-out="signOut" />
+            <PosHeader @shortcuts="store.shortcutModalOpen = true" @held-sales="store.heldSalesModalOpen = true; store.loadHeldSales()" @sale-lookup="store.prepareSalesHistory()" @open-shift="shiftModalMode = 'open'" @close-shift="closeShift" @sign-out="signOut" />
 
             <div v-if="store.errors.length" class="pos-card rounded-[28px] border border-[var(--pos-danger)]/30 bg-[rgba(255,93,115,0.12)] p-4 text-sm text-rose-100">
                 <p class="mb-2 font-semibold uppercase tracking-[0.2em] text-rose-200">Attention</p>
@@ -151,5 +178,6 @@ onBeforeUnmount(() => {
         <SaleCompleteModal v-if="store.saleCompleteModal" @close="store.saleCompleteModal = null; focusSearch()" />
         <SaleLookupModal v-if="store.saleLookupModalOpen" @close="store.saleLookupModalOpen = false; focusSearch()" />
         <ShortcutHelpModal v-if="store.shortcutModalOpen" @close="store.shortcutModalOpen = false; focusSearch()" />
+        <CashierShiftModal v-if="shiftModalMode" :mode="shiftModalMode" @close="shiftModalMode = null; focusSearch()" @saved="shiftSaved" />
     </div>
 </template>

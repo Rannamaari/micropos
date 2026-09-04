@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Services\CashierShiftService;
 use App\Support\PosUserContextResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -11,6 +12,7 @@ class PosPageController extends Controller
 {
     public function __construct(
         private readonly PosUserContextResolver $posUserContextResolver,
+        private readonly CashierShiftService $cashierShiftService,
     ) {}
 
     public function __invoke(Request $request): View
@@ -47,6 +49,13 @@ class PosPageController extends Controller
                     'name' => $context['warehouse']->name,
                     'code' => $context['warehouse']->code,
                 ],
+                'active_shift' => ($shift = $this->cashierShiftService->activeFor($context, $user->id)) ? [
+                    'id' => $shift->id,
+                    'shift_number' => $shift->shift_number,
+                    'currency' => $shift->currency,
+                    'opening_cash' => $shift->opening_cash,
+                    'opened_at' => $shift->opened_at?->toIso8601String(),
+                ] : null,
                 'walk_in_customer' => $walkInCustomer ? [
                     'id' => $walkInCustomer->id,
                     'code' => $walkInCustomer->code,

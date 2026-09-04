@@ -6,6 +6,7 @@ use App\Enums\SaleStatus;
 use App\Exceptions\InventoryException;
 use App\Exceptions\TransactionException;
 use App\Models\Customer;
+use App\Models\CashierShift;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
@@ -13,6 +14,7 @@ use App\Models\SalePayment;
 use App\Models\SaleReturnItem;
 use App\Support\PosUserContextResolver;
 use App\Services\CustomerLedgerService;
+use App\Services\CashierShiftService;
 use App\Services\InventoryQueryService;
 use App\Services\NumberSequenceService;
 use App\Services\ProductSearchService;
@@ -47,6 +49,7 @@ class PosApiController extends Controller
         private readonly NumberSequenceService $numberSequenceService,
         private readonly PosUserContextResolver $posUserContextResolver,
         private readonly ReceiptProfileResolver $receiptProfileResolver,
+        private readonly CashierShiftService $cashierShiftService,
     ) {}
 
     public function searchProducts(Request $request): JsonResponse
@@ -141,6 +144,7 @@ class PosApiController extends Controller
 
         return $this->executeSaleMutation(function () use ($request, $context): Sale {
             $validated = $this->validateSalePayload($request, $context, false, false);
+            $shift = $this->cashierShiftService->activeFor($context, $request->user()->id);
 
             $sale = $this->salesService->createSale(
                 $context['company_id'],
@@ -153,6 +157,7 @@ class PosApiController extends Controller
                     'notes' => $validated['notes'] ?? null,
                     'created_by' => $request->user()->id,
                     'client_transaction_uuid' => $validated['client_transaction_uuid'],
+                    'cashier_shift_id' => $shift?->id,
                 ],
             );
 
@@ -304,6 +309,7 @@ class PosApiController extends Controller
         return $this->executeSaleMutation(function () use ($request, $sale): Sale {
             $context = $this->posContext($request, 'sales.complete');
             $validated = $this->validateSalePayload($request, $context, false, false);
+            $shift = $this->cashierShiftService->activeFor($context, $request->user()->id);
 
             $completed = $this->salesService->completeHeldSale(
                 $sale->id,
@@ -317,11 +323,57 @@ class PosApiController extends Controller
                     'notes' => $validated['notes'] ?? null,
                     'created_by' => $request->user()->id,
                     'completed_at' => now(),
+                    'cashier_shift_id' => $shift?->id,
                 ],
             );
 
             return $completed->fresh(['items.product.primaryBarcode', 'payments', 'customer']);
         });
+    }
+
+    public function openShift(Request $request): JsonResponse
+    {
+        $context = $this->posContext($request, 'sales.create');
+        $validated = Validator::make($request->all(), [
+            'opening_cash' => ['required', 'numeric', 'gte:0'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ])->validate();
+
+        $shift = $this->cashierShiftService->open(
+            $context,
+            $request->user(),
+            (float) $validated['opening_cash'],
+            $validated['notes'] ?? null,
+        );
+
+        return response()->json(['message' => 'Cashier shift opened.', 'data' => $this->transformShift($shift)]);
+    }
+
+    public function closeShift(Request $request, CashierShift $cashierShift): JsonResponse
+    {
+        $context = $this->posContext($request, 'sales.create');
+        $validated = Validator::make($request->all(), [
+            'closing_cash' => ['required', 'numeric', 'gte:0'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ])->validate();
+
+        try {
+            $shift = $this->cashierShiftService->close(
+                $cashierShift,
+                $context,
+                $request->user(),
+                (float) $validated['closing_cash'],
+                $validated['notes'] ?? null,
+            );
+        } catch (TransactionException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => 'Shift closed and EOD report generated.',
+            'data' => $this->transformShift($shift),
+            'print_url' => route('cashier-shifts.print', $shift),
+        ]);
     }
 
     public function cancelHeldSale(Request $request, Sale $sale): JsonResponse
@@ -632,6 +684,23 @@ class PosApiController extends Controller
             : null;
 
         return $this->transformProductForPosFromBalance($product, $balance, $branchId);
+    }
+
+    /** @return array<string, mixed> */
+    private function transformShift(CashierShift $shift): array
+    {
+        return [
+            'id' => $shift->id,
+            'shift_number' => $shift->shift_number,
+            'status' => $shift->status,
+            'currency' => $shift->currency,
+            'opening_cash' => $shift->opening_cash,
+            'expected_cash' => $shift->expected_cash,
+            'closing_cash' => $shift->closing_cash,
+            'cash_variance' => $shift->cash_variance,
+            'opened_at' => $shift->opened_at?->toIso8601String(),
+            'closed_at' => $shift->closed_at?->toIso8601String(),
+        ];
     }
 
     private function transformProductForPosFromBalance(Product $product, ?string $balance, string $branchId): array

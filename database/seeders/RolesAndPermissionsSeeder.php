@@ -67,6 +67,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'sales.credit',
         'sales.discount',
         'sales.price_override',
+        'reports.view',
     ];
 
     /**
@@ -138,6 +139,7 @@ class RolesAndPermissionsSeeder extends Seeder
                 'sales.credit',
                 'sales.discount',
                 'sales.price_override',
+                'reports.view',
             ],
             'manager' => [
                 'companies.view',

@@ -121,6 +121,11 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasMany(Sale::class, 'created_by');
     }
 
+    public function cashierShifts(): HasMany
+    {
+        return $this->hasMany(CashierShift::class, 'cashier_id');
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
         if (! $this->is_active) {

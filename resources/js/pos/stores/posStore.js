@@ -79,10 +79,15 @@ export const usePosStore = defineStore('pos', () => {
     const paymentTotals = computed(() => paymentSummary(payments.value, totals.value.grandTotal));
     const dirty = computed(() => items.value.length > 0);
     const hasSalesHistoryResults = computed(() => saleSearchResults.value.length > 0);
+    const hasActiveShift = computed(() => Boolean(bootstrap.value.active_shift));
 
     function hydrate(data) {
         bootstrap.value = data;
         customer.value = data.walk_in_customer;
+    }
+
+    function setActiveShift(shift) {
+        bootstrap.value = { ...bootstrap.value, active_shift: shift };
     }
 
     function notify(message, type = 'info') {
@@ -678,7 +683,9 @@ export const usePosStore = defineStore('pos', () => {
         paymentTotals,
         dirty,
         hasSalesHistoryResults,
+        hasActiveShift,
         hydrate,
+        setActiveShift,
         formatMoney: (amount) => formatMoney(amount, currency.value),
         formatDateTime,
         formatStatus,

@@ -3,6 +3,7 @@
 use App\Http\Controllers\PosApiController;
 use App\Http\Controllers\PosPageController;
 use App\Http\Controllers\AdminSaleReceiptController;
+use App\Http\Controllers\CashierShiftReportController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -44,10 +45,13 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/pos', PosPageController::class)->name('pos.index');
     Route::get('/admin/sales/{sale}/receipt/{format}', AdminSaleReceiptController::class)->name('admin.sales.receipt');
+    Route::get('/reports/cashier-shifts/{cashierShift}/print', CashierShiftReportController::class)->name('cashier-shifts.print');
 
     Route::prefix('/pos/api')->group(function (): void {
         Route::get('/products/search', [PosApiController::class, 'searchProducts'])->name('pos.products.search');
         Route::get('/products/barcode/{barcode}', [PosApiController::class, 'barcodeLookup'])->name('pos.products.barcode');
+        Route::post('/shifts/open', [PosApiController::class, 'openShift'])->name('pos.shifts.open');
+        Route::post('/shifts/{cashierShift}/close', [PosApiController::class, 'closeShift'])->name('pos.shifts.close');
 
         Route::get('/customers/search', [PosApiController::class, 'searchCustomers'])->name('pos.customers.search');
         Route::post('/customers', [PosApiController::class, 'createCustomer'])->name('pos.customers.store');

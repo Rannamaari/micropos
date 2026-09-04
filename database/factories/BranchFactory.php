@@ -27,6 +27,7 @@ class BranchFactory extends Factory
             'email' => fake()->optional()->companyEmail(),
             'address' => fake()->optional()->address(),
             'city' => fake()->optional()->city(),
+            'currency' => 'MVR',
             'is_active' => true,
         ];
     }

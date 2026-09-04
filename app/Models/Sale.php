@@ -23,6 +23,7 @@ class Sale extends Model
         'company_id',
         'branch_id',
         'warehouse_id',
+        'cashier_shift_id',
         'customer_id',
         'sale_number',
         'status',
@@ -80,6 +81,11 @@ class Sale extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    public function cashierShift(): BelongsTo
+    {
+        return $this->belongsTo(CashierShift::class);
     }
 
     public function customer(): BelongsTo

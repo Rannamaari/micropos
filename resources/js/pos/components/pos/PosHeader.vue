@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { usePosStore } from '../../stores/posStore';
 
-const emit = defineEmits(['shortcuts', 'held-sales', 'sale-lookup', 'sign-out']);
+const emit = defineEmits(['shortcuts', 'held-sales', 'sale-lookup', 'sign-out', 'open-shift', 'close-shift']);
 const store = usePosStore();
 const now = ref(new Date());
 const mobileDetailsOpen = ref(false);
@@ -84,6 +84,8 @@ onBeforeUnmount(() => clearInterval(timer));
             </div>
 
             <div class="flex gap-2 overflow-x-auto pb-1 xl:flex-wrap xl:overflow-visible xl:pb-0">
+                <button v-if="store.hasActiveShift" class="pos-button-primary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('close-shift')">EOD / End Shift</button>
+                <button v-else class="pos-button-primary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('open-shift')">Open Shift</button>
                 <button class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('held-sales')">Held Sales</button>
                 <button v-if="store.canViewSalesHistory" class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('sale-lookup')">Sales History</button>
                 <button class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('shortcuts')">Shortcuts</button>

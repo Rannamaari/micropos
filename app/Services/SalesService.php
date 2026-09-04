@@ -7,6 +7,7 @@ use App\Enums\SaleStatus;
 use App\Enums\StockMovementType;
 use App\Exceptions\TransactionException;
 use App\Models\Branch;
+use App\Models\CashierShift;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\ProductBranchPrice;
@@ -52,6 +53,20 @@ class SalesService
         return DB::transaction(function () use ($companyId, $branchId, $warehouseId, $items, $payments, $attributes): Sale {
             $warehouse = $this->resolveWarehouse($companyId, $branchId, $warehouseId);
             $branch = Branch::query()->where('company_id', $companyId)->findOrFail($branchId);
+
+            if ($shiftId = $attributes['cashier_shift_id'] ?? null) {
+                $shift = CashierShift::query()
+                    ->where('company_id', $companyId)
+                    ->where('branch_id', $branchId)
+                    ->where('warehouse_id', $warehouse->id)
+                    ->lockForUpdate()
+                    ->findOrFail($shiftId);
+
+                if ($shift->status !== 'open') {
+                    throw new TransactionException('The cashier shift is already closed. Open a new shift before completing this sale.');
+                }
+            }
+
             $customer = $this->resolveCustomer($companyId, $attributes['customer_id'] ?? null);
             $status = $attributes['status'] ?? SaleStatus::Completed;
 
@@ -74,6 +89,7 @@ class SalesService
                 'company_id' => $companyId,
                 'branch_id' => $branchId,
                 'warehouse_id' => $warehouse->id,
+                'cashier_shift_id' => $attributes['cashier_shift_id'] ?? null,
                 'customer_id' => $customer?->id,
                 'sale_number' => $attributes['sale_number'] ?? $this->numberSequenceService->next($companyId, 'sale'),
                 'status' => $status,
@@ -190,6 +206,7 @@ class SalesService
                 'balance_due' => $totals['grand_total'],
                 'notes' => $attributes['notes'] ?? null,
                 'completed_at' => null,
+                'cashier_shift_id' => $attributes['cashier_shift_id'] ?? null,
             ];
 
             if ($this->supportsHeldSaleCancellationAudit()) {
