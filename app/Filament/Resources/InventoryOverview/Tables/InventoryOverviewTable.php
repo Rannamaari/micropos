@@ -46,8 +46,8 @@ class InventoryOverviewTable
                 TextColumn::make('sku')
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->whereRaw(
-                            'LOWER(products.sku) LIKE ?',
-                            ['%'.strtolower($search).'%'],
+                            'LOWER(products.sku) = ?',
+                            [strtolower(trim($search))],
                         );
                     })
                     ->sortable(),

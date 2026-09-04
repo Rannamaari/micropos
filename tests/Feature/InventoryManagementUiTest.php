@@ -168,7 +168,7 @@ class InventoryManagementUiTest extends TestCase
             'company_id' => $warehouse->company_id,
             'unit_id' => Unit::factory()->create()->id,
             'name' => 'Scanner Cola',
-            'sku' => 'SCN-002-COLA',
+            'sku' => '2',
         ]);
 
         ProductBarcode::factory()->create([
@@ -192,6 +192,13 @@ class InventoryManagementUiTest extends TestCase
             'sku' => 'BARCODE-ONLY',
         ]);
 
+        $skuZeroZeroTwoProduct = Product::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'unit_id' => Unit::factory()->create()->id,
+            'name' => 'SKU 002 product',
+            'sku' => '002',
+        ]);
+
         ProductBarcode::factory()->create([
             'company_id' => $warehouse->company_id,
             'product_id' => $barcodeOnlyProduct->id,
@@ -201,11 +208,15 @@ class InventoryManagementUiTest extends TestCase
 
         $component = Livewire::actingAs($user)->test(ListInventoryOverview::class);
 
-        $component->set('tableSearch', 'SCN-002-COLA')->assertSee('Scanner Cola');
-        $component->set('tableSearch', '002')
+        $component->set('tableSearch', '2')
             ->assertSee('Scanner Cola')
             ->assertDontSee($nameOnlyProduct->name)
-            ->assertDontSee($barcodeOnlyProduct->name);
+            ->assertDontSee($barcodeOnlyProduct->name)
+            ->assertDontSee($skuZeroZeroTwoProduct->name);
+
+        $component->set('tableSearch', '002')
+            ->assertSee($skuZeroZeroTwoProduct->name)
+            ->assertDontSee('Scanner Cola');
 
         $component->set('tableSearch', '')
             ->set('tableColumnSearches.name', 'Scanner Cola')
