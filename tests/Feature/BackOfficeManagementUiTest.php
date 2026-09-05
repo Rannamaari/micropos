@@ -226,6 +226,33 @@ class BackOfficeManagementUiTest extends TestCase
     }
 
     #[Test]
+    public function product_creation_page_shows_the_latest_company_product_and_sku(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $user = $this->userWithRole('admin', $warehouse);
+        $product = Product::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'unit_id' => Unit::factory()->create()->id,
+            'name' => 'Latest Catalog Product',
+            'sku' => 'LATEST-001',
+        ]);
+
+        Product::factory()->create([
+            'company_id' => Company::factory()->create()->id,
+            'unit_id' => Unit::factory()->create()->id,
+            'name' => 'Other Company Product',
+            'sku' => 'OTHER-001',
+        ]);
+
+        $this->actingAs($user)
+            ->get('/admin/products/create')
+            ->assertOk()
+            ->assertSee($product->name)
+            ->assertSee('SKU: '.$product->sku)
+            ->assertDontSee('Other Company Product');
+    }
+
+    #[Test]
     public function purchase_receive_action_uses_fresh_remaining_quantities(): void
     {
         $warehouse = Warehouse::factory()->create();

@@ -10,6 +10,7 @@ use App\Models\Warehouse;
 use App\Services\InventoryQueryService;
 use App\Support\InventoryStatus;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -30,6 +31,23 @@ class ProductForm
             ->components([
                 Hidden::make('company_id')
                     ->default(fn (): ?string => AdminSupport::companyId()),
+                Section::make('Last Product Added')
+                    ->description('Reference only. This is the latest product added to your company catalog.')
+                    ->visibleOn('create')
+                    ->schema([
+                        Placeholder::make('last_product_added')
+                            ->label('Product / SKU')
+                            ->content(function (): string {
+                                $product = Product::query()
+                                    ->where('company_id', AdminSupport::companyId())
+                                    ->latest('created_at')
+                                    ->first(['name', 'sku']);
+
+                                return $product
+                                    ? "{$product->name} (SKU: {$product->sku})"
+                                    : 'No products have been added yet.';
+                            }),
+                    ]),
                 Section::make('Product Details')
                     ->schema([
                         Grid::make(2)
