@@ -1,9 +1,9 @@
 <?php
 
-use App\Http\Controllers\PosApiController;
-use App\Http\Controllers\PosPageController;
 use App\Http\Controllers\AdminSaleReceiptController;
 use App\Http\Controllers\CashierShiftReportController;
+use App\Http\Controllers\PosApiController;
+use App\Http\Controllers\PosPageController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -11,6 +11,13 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::post('/locale/{locale}', function (Request $request, string $locale) {
+    abort_unless(in_array($locale, ['en', 'dv'], true), 404);
+    $request->session()->put('locale', $locale);
+
+    return back();
+})->name('locale.switch');
 
 Route::middleware('guest')->group(function (): void {
     Route::view('/login', 'auth.login')->name('login');

@@ -6,8 +6,8 @@ use App\Filament\Support\AdminSupport;
 use App\Models\Branch;
 use App\Services\ReceiptProfileResolver;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -23,11 +23,19 @@ class ReceiptSettings extends Page
 
     protected static ?string $title = 'Branch Receipt Settings';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
-
     protected string $view = 'filament.pages.receipt-settings';
 
     public ?array $data = [];
+
+    public static function getNavigationGroup(): string|\UnitEnum|null
+    {
+        return __('nav.administration');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('nav.settings');
+    }
 
     public function mount(): void
     {

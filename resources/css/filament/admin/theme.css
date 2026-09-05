@@ -1,4 +1,24 @@
 @import '../../../../vendor/filament/filament/resources/css/theme.css';
 
+@font-face {
+    font-family: 'MV Faseyha';
+    src: url('../../../fonts/MV-Faseyha.otf') format('opentype');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
 @source '../../../../app/Filament/**/*';
 @source '../../../../resources/views/filament/**/*.blade.php';
+
+html[dir="rtl"] .fi-body,
+html[dir="rtl"] .fi-main,
+html[dir="rtl"] .fi-sidebar {
+    direction: rtl;
+    font-family: 'MV Faseyha', ui-sans-serif, system-ui, sans-serif;
+}
+
+.locale-switch {
+    direction: ltr;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+}

@@ -34,6 +34,8 @@ class PosPageController extends Controller
                     'name' => $user->name,
                     'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
                 ],
+                'locale' => app()->getLocale(),
+                'translations' => trans('pos'),
                 'company' => [
                     'id' => $user->company?->id,
                     'name' => $user->company?->name,

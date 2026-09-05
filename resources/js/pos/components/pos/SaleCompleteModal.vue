@@ -23,15 +23,15 @@ const changeDue = computed(() => (store.saleCompleteModal?.payments ?? [])
                     <p class="mt-1 break-words text-lg font-bold tabular-nums text-white">{{ store.formatMoney(store.saleCompleteModal.paid_total) }}</p>
                 </div>
                 <div class="min-w-0 rounded-2xl bg-[var(--pos-success)]/12 p-4">
-                    <p class="text-xs uppercase tracking-[0.18em] text-[var(--pos-success)]">Change to Return</p>
+                    <p class="text-xs uppercase tracking-[0.18em] text-[var(--pos-success)]">{{ store.t('change_to_return') }}</p>
                     <p class="mt-1 break-words text-lg font-bold tabular-nums text-[var(--pos-success)]">{{ store.formatMoney(changeDue) }}</p>
                 </div>
             </div>
             <p v-if="Number(store.saleCompleteModal.balance_due) > 0" class="mt-3 text-sm text-amber-200">Outstanding balance: {{ store.formatMoney(store.saleCompleteModal.balance_due) }}</p>
             <div class="mt-6 grid gap-3 sm:grid-cols-3">
-                <button class="pos-button-primary min-h-12" @click="$emit('close')">New Sale</button>
-                <button class="pos-button-secondary min-h-12" @click="store.printActiveSale(store.saleCompleteModal, 'thermal')">Thermal Receipt</button>
-                <button class="pos-button-secondary min-h-12" @click="store.printActiveSale(store.saleCompleteModal, 'a4')">A4 Tax Invoice</button>
+                <button class="pos-button-primary min-h-12" @click="$emit('close')">{{ store.t('new_sale') }}</button>
+                <button class="pos-button-secondary min-h-12" @click="store.printActiveSale(store.saleCompleteModal, 'thermal')">{{ store.t('thermal_receipt') }}</button>
+                <button class="pos-button-secondary min-h-12" @click="store.printActiveSale(store.saleCompleteModal, 'a4')">{{ store.t('a4_tax_invoice') }}</button>
             </div>
         </div>
     </div>

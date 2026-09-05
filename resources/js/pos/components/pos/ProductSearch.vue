@@ -1,5 +1,8 @@
 <script setup>
 import { nextTick, onMounted, ref, watch } from 'vue';
+import { usePosStore } from '../../stores/posStore';
+
+const store = usePosStore();
 
 const props = defineProps({
     modelValue: {
@@ -45,7 +48,7 @@ onMounted(focusInput);
 <template>
     <div class="mb-4">
         <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-[var(--pos-muted)]">
-            Search / Scan
+            {{ store.t('search_scan') }}
         </label>
         <div class="flex gap-3">
             <input
@@ -53,7 +56,7 @@ onMounted(focusInput);
                 :value="modelValue"
                 :disabled="disabled"
                 class="pos-input text-lg"
-                placeholder="Scan barcode or search by name / SKU"
+                :placeholder="store.t('search_placeholder')"
                 @input="onInput"
                 @keydown="onKeydown"
             >

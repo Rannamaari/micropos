@@ -12,6 +12,12 @@ const timer = setInterval(() => {
 }, 1000);
 
 const formattedNow = computed(() => now.value.toLocaleString());
+const isDhivehi = computed(() => store.bootstrap.locale === 'dv');
+
+async function toggleLocale() {
+    await window.axios.post(`/locale/${isDhivehi.value ? 'en' : 'dv'}`);
+    window.location.reload();
+}
 
 onMounted(() => {});
 onBeforeUnmount(() => clearInterval(timer));
@@ -84,12 +90,13 @@ onBeforeUnmount(() => clearInterval(timer));
             </div>
 
             <div class="flex gap-2 overflow-x-auto pb-1 xl:flex-wrap xl:overflow-visible xl:pb-0">
-                <button v-if="store.hasActiveShift" class="pos-button-primary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('close-shift')">EOD / End Shift</button>
-                <button v-else class="pos-button-primary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('open-shift')">Open Shift</button>
-                <button class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('held-sales')">Held Sales</button>
-                <button v-if="store.canViewSalesHistory" class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('sale-lookup')">Sales History</button>
-                <button class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('shortcuts')">Shortcuts</button>
-                <button class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('sign-out')">Sign Out</button>
+                <button class="pos-button-secondary pos-language-toggle min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="toggleLocale">{{ isDhivehi ? 'EN' : 'DV' }}</button>
+                <button v-if="store.hasActiveShift" class="pos-button-primary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('close-shift')">{{ store.t('end_of_day') }}</button>
+                <button v-else class="pos-button-primary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('open-shift')">{{ store.t('open_shift') }}</button>
+                <button class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('held-sales')">{{ store.t('held_sales') }}</button>
+                <button v-if="store.canViewSalesHistory" class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('sale-lookup')">{{ store.t('sales_history') }}</button>
+                <button class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('shortcuts')">{{ store.t('shortcuts') }}</button>
+                <button class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('sign-out')">{{ store.t('sign_out') }}</button>
             </div>
         </div>
     </header>

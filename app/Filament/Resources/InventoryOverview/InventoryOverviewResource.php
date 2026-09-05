@@ -46,7 +46,7 @@ class InventoryOverviewResource extends BaseResource
 
     public static function getNavigationLabel(): string
     {
-        return 'Inventory Overview';
+        return __('nav.inventory_overview');
     }
 
     public static function getModelLabel(): string
@@ -61,7 +61,7 @@ class InventoryOverviewResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Inventory';
+        return __('nav.inventory');
     }
 
     public static function getNavigationSort(): ?int

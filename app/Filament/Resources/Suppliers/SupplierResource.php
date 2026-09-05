@@ -65,6 +65,11 @@ class SupplierResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Purchasing';
+        return __('nav.purchasing');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('nav.suppliers');
     }
 }

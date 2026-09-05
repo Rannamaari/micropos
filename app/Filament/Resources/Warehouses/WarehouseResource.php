@@ -67,6 +67,6 @@ class WarehouseResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Administration';
+        return __('nav.administration');
     }
 }

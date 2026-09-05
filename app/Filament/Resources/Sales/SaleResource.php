@@ -3,8 +3,6 @@
 namespace App\Filament\Resources\Sales;
 
 use App\Filament\Resources\BaseResource;
-use App\Filament\Resources\Sales\Pages\CreateSale;
-use App\Filament\Resources\Sales\Pages\EditSale;
 use App\Filament\Resources\Sales\Pages\ListSales;
 use App\Filament\Resources\Sales\Pages\ViewSale;
 use App\Filament\Resources\Sales\Schemas\SaleForm;
@@ -12,10 +10,11 @@ use App\Filament\Resources\Sales\Schemas\SaleInfolist;
 use App\Filament\Resources\Sales\Tables\SalesTable;
 use App\Models\Sale;
 use BackedEnum;
-use Illuminate\Database\Eloquent\Builder;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class SaleResource extends BaseResource
@@ -60,7 +59,7 @@ class SaleResource extends BaseResource
         return false;
     }
 
-    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    public static function canEdit(Model $record): bool
     {
         return false;
     }
@@ -75,6 +74,11 @@ class SaleResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Sales';
+        return __('nav.sales');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('nav.sales');
     }
 }

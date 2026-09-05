@@ -26,7 +26,7 @@ const lineTotal = computed(() => {
                 <h3 class="font-semibold text-white">{{ item.name }}</h3>
                 <p class="mt-1 truncate text-sm text-[var(--pos-muted)]">{{ item.sku }}<span v-if="item.barcode"> • {{ item.barcode }}</span></p>
             </div>
-            <button type="button" class="min-h-11 shrink-0 rounded-xl px-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-100/10 hover:text-rose-100" @click="store.removeItem(item.productId)">Remove</button>
+            <button type="button" class="min-h-11 shrink-0 rounded-xl px-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-100/10 hover:text-rose-100" @click="store.removeItem(item.productId)">{{ store.t('remove') }}</button>
         </div>
 
         <div class="grid gap-4 2xl:grid-cols-[auto_minmax(0,1fr)_auto] 2xl:items-end">

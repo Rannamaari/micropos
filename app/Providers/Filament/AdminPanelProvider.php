@@ -2,11 +2,12 @@
 
 namespace App\Providers\Filament;
 
-use App\Filament\Widgets\OperationsOverview;
 use App\Filament\Widgets\BestSellersTable;
 use App\Filament\Widgets\BranchSalesTable;
 use App\Filament\Widgets\DailyBranchSalesChart;
 use App\Filament\Widgets\LowStockTable;
+use App\Filament\Widgets\OperationsOverview;
+use App\Http\Middleware\SetApplicationLocale;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -16,7 +17,9 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -38,13 +41,13 @@ class AdminPanelProvider extends PanelProvider
                 'primary' => Color::Amber,
             ])
             ->navigationGroups([
-                NavigationGroup::make()->label('Catalog'),
-                NavigationGroup::make()->label('Inventory'),
-                NavigationGroup::make()->label('Purchasing'),
-                NavigationGroup::make()->label('Customers'),
-                NavigationGroup::make()->label('Sales'),
-                NavigationGroup::make()->label('Reports'),
-                NavigationGroup::make()->label('Administration'),
+                NavigationGroup::make()->label(fn (): string => __('nav.catalog')),
+                NavigationGroup::make()->label(fn (): string => __('nav.inventory')),
+                NavigationGroup::make()->label(fn (): string => __('nav.purchasing')),
+                NavigationGroup::make()->label(fn (): string => __('nav.customers')),
+                NavigationGroup::make()->label(fn (): string => __('nav.sales')),
+                NavigationGroup::make()->label(fn (): string => __('nav.reports')),
+                NavigationGroup::make()->label(fn (): string => __('nav.administration')),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
@@ -60,10 +63,15 @@ class AdminPanelProvider extends PanelProvider
                 BestSellersTable::class,
                 LowStockTable::class,
             ])
+            ->renderHook(
+                PanelsRenderHook::TOPBAR_END,
+                fn (): View => view('filament.partials.locale-toggle'),
+            )
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
+                SetApplicationLocale::class,
                 AuthenticateSession::class,
                 ShareErrorsFromSession::class,
                 VerifyCsrfToken::class,

@@ -20,8 +20,6 @@ class DataImport extends Page
 
     protected static ?string $title = 'CSV Data Import';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
-
     protected string $view = 'filament.pages.data-import';
 
     public string $type = 'products';
@@ -34,6 +32,11 @@ class DataImport extends Page
 
     /** @var array<string,mixed>|null */
     public ?array $preview = null;
+
+    public static function getNavigationGroup(): string|\UnitEnum|null
+    {
+        return __('nav.administration');
+    }
 
     public function mount(): void
     {
@@ -67,6 +70,7 @@ class DataImport extends Page
     {
         $template = $importer->template($this->type);
         $contents = implode(',', $template['headers'])."\n".implode(',', $template['example'])."\n";
-        return response()->streamDownload(fn () => print($contents), "{$this->type}-import-template.csv", ['Content-Type' => 'text/csv']);
+
+        return response()->streamDownload(fn () => print ($contents), "{$this->type}-import-template.csv", ['Content-Type' => 'text/csv']);
     }
 }

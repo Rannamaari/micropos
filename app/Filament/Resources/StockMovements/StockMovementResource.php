@@ -13,6 +13,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class StockMovementResource extends BaseResource
@@ -58,12 +59,12 @@ class StockMovementResource extends BaseResource
         return false;
     }
 
-    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    public static function canEdit(Model $record): bool
     {
         return false;
     }
 
-    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    public static function canDelete(Model $record): bool
     {
         return false;
     }
@@ -80,7 +81,7 @@ class StockMovementResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Inventory';
+        return __('nav.inventory');
     }
 
     public static function getNavigationSort(): ?int

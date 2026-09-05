@@ -15,11 +15,14 @@ class TransactionDataReset extends Page
 
     protected static ?string $title = 'Reset Test Transaction Data';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
-
     protected string $view = 'filament.pages.transaction-data-reset';
 
     public string $confirmation = '';
+
+    public static function getNavigationGroup(): string|\UnitEnum|null
+    {
+        return __('nav.administration');
+    }
 
     public static function canAccess(): bool
     {

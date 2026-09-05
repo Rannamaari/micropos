@@ -7,14 +7,15 @@ use App\Filament\Resources\PurchaseReturns\Pages\ListPurchaseReturns;
 use App\Filament\Resources\PurchaseReturns\Pages\ViewPurchaseReturn;
 use App\Models\PurchaseReturn;
 use BackedEnum;
-use Filament\Schemas\Schema;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
-use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class PurchaseReturnResource extends BaseResource
@@ -73,7 +74,7 @@ class PurchaseReturnResource extends BaseResource
         return false;
     }
 
-    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    public static function canEdit(Model $record): bool
     {
         return false;
     }
@@ -88,6 +89,6 @@ class PurchaseReturnResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Purchasing';
+        return __('nav.purchasing');
     }
 }

@@ -27,12 +27,12 @@ const store = usePosStore();
 
         <div class="mt-4 grid gap-3 sm:grid-cols-3">
             <button type="button" class="pos-button-secondary min-h-12" :disabled="store.loading.holdingSale || !store.canHoldSale" @click="emit('hold')">
-                {{ store.loading.holdingSale ? 'Holding…' : 'Hold Sale' }}
+                {{ store.loading.holdingSale ? '...' : store.t('hold_sale') }}
             </button>
             <button type="button" class="pos-button-primary min-h-12" :disabled="!canOpenPayment || store.loading.completingSale" @click="emit('payment')">
-                {{ store.loading.completingSale ? 'Processing…' : 'Payment (F8)' }}
+                {{ store.loading.completingSale ? '...' : `${store.t('payment')} (F8)` }}
             </button>
-            <button type="button" class="pos-button-secondary min-h-12" :disabled="!store.items.length" @click="emit('new-sale')">New Sale</button>
+            <button type="button" class="pos-button-secondary min-h-12" :disabled="!store.items.length" @click="emit('new-sale')">{{ store.t('new_sale') }}</button>
         </div>
     </div>
 </template>

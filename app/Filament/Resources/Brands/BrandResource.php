@@ -67,6 +67,11 @@ class BrandResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Catalog';
+        return __('nav.catalog');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('nav.brands');
     }
 }

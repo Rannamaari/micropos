@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Purchases;
 
+use App\Enums\PurchaseStatus;
 use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\Purchases\Pages\CreatePurchase;
 use App\Filament\Resources\Purchases\Pages\EditPurchase;
@@ -11,12 +12,12 @@ use App\Filament\Resources\Purchases\Schemas\PurchaseForm;
 use App\Filament\Resources\Purchases\Schemas\PurchaseInfolist;
 use App\Filament\Resources\Purchases\Tables\PurchasesTable;
 use App\Models\Purchase;
-use App\Enums\PurchaseStatus;
 use BackedEnum;
-use Illuminate\Database\Eloquent\Builder;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class PurchaseResource extends BaseResource
@@ -60,7 +61,7 @@ class PurchaseResource extends BaseResource
         return parent::getEloquentQuery()->with(['supplier', 'branch', 'warehouse', 'items.product.primaryBarcode', 'payments', 'creator', 'receiver']);
     }
 
-    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    public static function canEdit(Model $record): bool
     {
         if (! $record instanceof Purchase) {
             return false;
@@ -93,6 +94,11 @@ class PurchaseResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Purchasing';
+        return __('nav.purchasing');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('nav.purchase_orders');
     }
 }

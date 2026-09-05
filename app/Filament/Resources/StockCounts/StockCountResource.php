@@ -12,10 +12,10 @@ use App\Filament\Resources\StockCounts\Schemas\StockCountInfolist;
 use App\Filament\Resources\StockCounts\Tables\StockCountsTable;
 use App\Models\StockCount;
 use BackedEnum;
-use Illuminate\Database\Eloquent\Builder;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class StockCountResource extends BaseResource
@@ -74,12 +74,12 @@ class StockCountResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Inventory';
+        return __('nav.inventory');
     }
 
     public static function getNavigationLabel(): string
     {
-        return 'Stock Counts';
+        return __('nav.stock_counts');
     }
 
     public static function getNavigationSort(): ?int

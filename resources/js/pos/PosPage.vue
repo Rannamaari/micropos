@@ -150,8 +150,8 @@ onBeforeUnmount(() => {
             </div>
 
             <div v-if="!store.hasActiveShift" class="pos-card rounded-[28px] border border-[var(--pos-accent)]/35 bg-[var(--pos-accent)]/10 p-4 text-sm text-[var(--pos-paper)]">
-                <strong>POS is locked until a cashier shift is opened.</strong>
-                <span class="ml-1 text-[var(--pos-muted)]">Use Open Shift above, enter the opening cash, then start scanning.</span>
+                <strong>{{ store.t('pos_locked') }}</strong>
+                <span class="ml-1 text-[var(--pos-muted)]">{{ store.t('pos_locked_help') }}</span>
             </div>
 
             <div class="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(420px,0.8fr)]" :class="{ 'pointer-events-none opacity-45': !store.hasActiveShift }">

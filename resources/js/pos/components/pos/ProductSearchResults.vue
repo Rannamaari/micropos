@@ -19,7 +19,7 @@ const store = usePosStore();
 <template>
     <div class="flex-1 overflow-hidden rounded-[28px] border border-white/8 bg-black/10">
         <div class="flex items-center justify-between border-b border-white/8 px-4 py-3 text-xs uppercase tracking-[0.22em] text-[var(--pos-muted)]">
-            <span>Products</span>
+            <span>{{ store.t('products') }}</span>
             <span v-if="store.loading.searchingProducts">Searching…</span>
         </div>
         <div class="pos-scrollbar h-full max-h-[calc(100vh-22rem)] overflow-y-auto">

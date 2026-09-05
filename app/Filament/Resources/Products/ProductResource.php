@@ -12,10 +12,10 @@ use App\Filament\Resources\Products\Schemas\ProductInfolist;
 use App\Filament\Resources\Products\Tables\ProductsTable;
 use App\Models\Product;
 use BackedEnum;
-use Illuminate\Database\Eloquent\Builder;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class ProductResource extends BaseResource
@@ -73,6 +73,11 @@ class ProductResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Catalog';
+        return __('nav.catalog');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('nav.products');
     }
 }

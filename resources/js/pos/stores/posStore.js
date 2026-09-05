@@ -81,6 +81,10 @@ export const usePosStore = defineStore('pos', () => {
     const hasSalesHistoryResults = computed(() => saleSearchResults.value.length > 0);
     const hasActiveShift = computed(() => Boolean(bootstrap.value.active_shift));
 
+    function t(key) {
+        return bootstrap.value.translations?.[key] ?? key;
+    }
+
     function hydrate(data) {
         bootstrap.value = data;
         customer.value = data.walk_in_customer;
@@ -686,6 +690,7 @@ export const usePosStore = defineStore('pos', () => {
         hasActiveShift,
         hydrate,
         setActiveShift,
+        t,
         formatMoney: (amount) => formatMoney(amount, currency.value),
         formatDateTime,
         formatStatus,

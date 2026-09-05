@@ -41,9 +41,20 @@ class CashierShiftResource extends BaseResource
         return parent::getEloquentQuery()->with(['branch', 'warehouse', 'cashier']);
     }
 
-    public static function canCreate(): bool { return false; }
-    public static function canEdit(Model $record): bool { return false; }
-    public static function canDelete(Model $record): bool { return false; }
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
 
     public static function getPages(): array
     {
@@ -53,7 +64,18 @@ class CashierShiftResource extends BaseResource
         ];
     }
 
-    public static function getNavigationGroup(): string|UnitEnum|null { return 'Reports'; }
-    public static function getNavigationLabel(): string { return 'Cashier Shifts / EOD'; }
-    public static function getNavigationSort(): ?int { return 1; }
+    public static function getNavigationGroup(): string|UnitEnum|null
+    {
+        return __('nav.reports');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('nav.cashier_shifts_eod');
+    }
+
+    public static function getNavigationSort(): ?int
+    {
+        return 1;
+    }
 }

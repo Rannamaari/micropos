@@ -1,5 +1,13 @@
 @import 'tailwindcss';
 
+@font-face {
+    font-family: 'MV Faseyha';
+    src: url('../fonts/MV-Faseyha.otf') format('opentype');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
@@ -48,6 +56,29 @@ body {
         radial-gradient(circle at top left, rgba(255, 159, 28, 0.08), transparent 24rem),
         radial-gradient(circle at bottom right, rgba(86, 211, 155, 0.08), transparent 22rem),
         linear-gradient(160deg, #0e1b25 0%, #101820 42%, #0f202c 100%);
+}
+
+html[dir="rtl"] body,
+html[dir="rtl"] .pos-shell {
+    direction: rtl;
+    font-family: 'MV Faseyha', var(--font-sans);
+}
+
+html[dir="rtl"] .pos-shell .tabular-nums {
+    direction: ltr;
+}
+
+html[dir="rtl"] .pos-shell .text-left {
+    text-align: right;
+}
+
+html[dir="rtl"] .pos-shell .text-right {
+    text-align: left;
+}
+
+.pos-language-toggle {
+    direction: ltr;
+    font-family: var(--font-sans);
 }
 
 .pos-card {

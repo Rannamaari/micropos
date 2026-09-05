@@ -14,7 +14,7 @@ const emit = defineEmits(['open-customer']);
 const store = usePosStore();
 const cartList = ref(null);
 
-const currentCustomerLabel = computed(() => store.customer?.name ?? 'Walk-in Customer');
+const currentCustomerLabel = computed(() => store.customer?.name ?? store.t('walk_in_customer'));
 const displayedItems = computed(() => [...store.items].reverse());
 
 watch(() => store.items, async () => {
@@ -26,11 +26,11 @@ watch(() => store.items, async () => {
 <template>
     <div class="mb-4 flex items-start justify-between gap-3 border-b border-white/8 pb-4">
         <div class="min-w-0">
-            <p class="text-xs uppercase tracking-[0.22em] text-[var(--pos-muted)]">Current Sale</p>
-            <h2 class="mt-1 text-2xl font-bold text-white">{{ isResumedSale ? 'Resumed Sale' : 'New Sale' }}</h2>
+            <p class="text-xs uppercase tracking-[0.22em] text-[var(--pos-muted)]">{{ store.t('current_sale') }}</p>
+            <h2 class="mt-1 text-2xl font-bold text-white">{{ store.t('new_sale') }}</h2>
         </div>
         <div class="min-w-0 shrink text-right">
-            <p class="text-xs uppercase tracking-[0.22em] text-[var(--pos-muted)]">Customer</p>
+            <p class="text-xs uppercase tracking-[0.22em] text-[var(--pos-muted)]">{{ store.t('customer') }}</p>
             <button class="mt-1 max-w-full truncate font-semibold text-[var(--pos-accent-strong)]" @click="emit('open-customer')">{{ currentCustomerLabel }}</button>
         </div>
     </div>

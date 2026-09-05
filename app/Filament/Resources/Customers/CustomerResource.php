@@ -65,6 +65,11 @@ class CustomerResource extends BaseResource
 
     public static function getNavigationGroup(): string|UnitEnum|null
     {
-        return 'Customers';
+        return __('nav.customers');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('nav.customers');
     }
 }

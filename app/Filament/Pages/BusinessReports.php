@@ -22,8 +22,6 @@ class BusinessReports extends Page
 
     protected static ?string $title = 'Business Reports';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Reports';
-
     protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.pages.business-reports';
@@ -37,6 +35,11 @@ class BusinessReports extends Page
     public static function canAccess(): bool
     {
         return (bool) AdminSupport::user()?->can('reports.view');
+    }
+
+    public static function getNavigationGroup(): string|\UnitEnum|null
+    {
+        return __('nav.reports');
     }
 
     public function mount(): void

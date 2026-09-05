@@ -90,8 +90,8 @@ onMounted(focusPaymentInput);
         <div class="pos-card my-auto w-full max-w-3xl rounded-[32px] p-5 sm:p-6">
             <div class="mb-5 flex items-center justify-between gap-3">
                 <div>
-                    <p class="text-xs uppercase tracking-[0.22em] text-[var(--pos-muted)]">Payment</p>
-                    <h2 class="mt-1 text-2xl font-bold text-white">Complete Sale</h2>
+                    <p class="text-xs uppercase tracking-[0.22em] text-[var(--pos-muted)]">{{ store.t('payment') }}</p>
+                    <h2 class="mt-1 text-2xl font-bold text-white">{{ store.t('complete_sale') }}</h2>
                 </div>
                 <button class="pos-button-secondary min-h-12" @click="emit('close')">Close</button>
             </div>
@@ -131,7 +131,7 @@ onMounted(focusPaymentInput);
 
                     <div v-if="form.payment_method === 'cash'" class="mt-4 grid gap-3 sm:grid-cols-2">
                         <label class="text-sm text-[var(--pos-muted)]">
-                            Cash Tendered
+                            {{ store.t('cash_tendered') }}
                             <input
                                 ref="tenderedInput"
                                 v-model="form.amount_tendered"
@@ -143,7 +143,7 @@ onMounted(focusPaymentInput);
                             >
                         </label>
                         <div class="rounded-2xl bg-[var(--pos-success)]/10 p-4">
-                            <p class="text-xs uppercase tracking-[0.18em] text-[var(--pos-success)]">Change to Return</p>
+                            <p class="text-xs uppercase tracking-[0.18em] text-[var(--pos-success)]">{{ store.t('change_to_return') }}</p>
                             <p class="mt-1 text-2xl font-bold tabular-nums text-[var(--pos-success)]">{{ store.formatMoney(changeDue) }}</p>
                         </div>
                     </div>
@@ -190,7 +190,7 @@ onMounted(focusPaymentInput);
                     </div>
                     <p v-else class="rounded-2xl border border-dashed border-white/10 p-4 text-sm text-[var(--pos-muted)]">Add a card payment, cash payment, or both.</p>
                     <button class="pos-button-primary mt-4 min-h-12 w-full" :disabled="store.loading.completingSale || (!store.payments.length && !store.canUseCredit)" @click="store.completeSale()">
-                        {{ store.loading.completingSale ? 'Completing…' : 'Complete Sale' }}
+                        {{ store.loading.completingSale ? '...' : store.t('complete_sale') }}
                     </button>
                     <p class="mt-3 text-sm text-[var(--pos-muted)]">For a split payment, add the card amount first, then enter the cash tendered for the remaining balance.</p>
                 </div>
