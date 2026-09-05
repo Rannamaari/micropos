@@ -78,7 +78,7 @@ class BusinessReports extends Page
         $branch = $this->selectedBranch();
 
         if (! $branch) {
-            return ['branch' => null, 'summary' => [], 'payments' => collect(), 'bestSellers' => collect(), 'lowStock' => collect()];
+            return ['branch' => null, 'summary' => [], 'dailySales' => collect(), 'payments' => collect(), 'bestSellers' => collect(), 'lowStock' => collect()];
         }
 
         $sales = $this->salesQuery($branch);
@@ -140,6 +140,7 @@ class BusinessReports extends Page
                 'returns_total' => (float) ($returns->returns_total ?? 0),
                 'inventory_value' => $inventoryValue,
             ],
+            'dailySales' => $this->dailySales($branch),
             'payments' => $payments,
             'bestSellers' => $bestSellers,
             'lowStock' => $this->lowStock($branch),
@@ -194,6 +195,38 @@ class BusinessReports extends Page
             ->where('products.track_inventory', true)
             ->selectRaw('COALESCE(SUM(CASE WHEN warehouses.id IS NOT NULL THEN inventory_balances.quantity * products.cost_price ELSE 0 END), 0) as value')
             ->value('value');
+    }
+
+    /** @return Collection<int, array{date: string, transactions: int, sales_total: float, returns_total: float, net_sales: float, paid_total: float}> */
+    private function dailySales(Branch $branch): Collection
+    {
+        $returnsByDate = SaleReturn::query()
+            ->where('company_id', $branch->company_id)
+            ->whereBetween('return_date', [$this->dateFrom, $this->dateTo])
+            ->whereHas('sale', fn (Builder $query) => $query->where('branch_id', $branch->id))
+            ->selectRaw('return_date, COALESCE(SUM(grand_total), 0) as returns_total')
+            ->groupBy('return_date')
+            ->pluck('returns_total', 'return_date');
+
+        return $this->salesQuery($branch)
+            ->selectRaw('sale_date, COUNT(*) as transactions, COALESCE(SUM(grand_total), 0) as sales_total, COALESCE(SUM(paid_total), 0) as paid_total')
+            ->groupBy('sale_date')
+            ->orderByDesc('sale_date')
+            ->get()
+            ->map(function (Sale $sale) use ($returnsByDate): array {
+                $saleDate = $sale->sale_date->toDateString();
+                $salesTotal = (float) $sale->sales_total;
+                $returnsTotal = (float) ($returnsByDate->get($saleDate) ?? 0);
+
+                return [
+                    'date' => $saleDate,
+                    'transactions' => (int) $sale->transactions,
+                    'sales_total' => $salesTotal,
+                    'returns_total' => $returnsTotal,
+                    'net_sales' => $salesTotal - $returnsTotal,
+                    'paid_total' => (float) $sale->paid_total,
+                ];
+            });
     }
 
     private function lowStock(Branch $branch): Collection

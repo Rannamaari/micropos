@@ -66,13 +66,27 @@ class BusinessReportsTest extends TestCase
             'payment_method' => 'cash',
             'amount' => 10,
         ]);
+        Sale::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'branch_id' => $warehouse->branch_id,
+            'warehouse_id' => $warehouse->id,
+            'status' => SaleStatus::Completed,
+            'sale_date' => today()->subDay(),
+            'subtotal' => 13,
+            'grand_total' => 13,
+            'paid_total' => 13,
+            'balance_due' => 0,
+        ]);
 
         $this->actingAs($admin)
             ->get('/admin/business-reports')
             ->assertOk()
             ->assertSee('Business Reports')
             ->assertSee('Report Cola')
-            ->assertSee('Tender Mix');
+            ->assertSee('Tender Mix')
+            ->assertSee('Daily Sales')
+            ->assertSee(today()->subDay()->format('M d, Y'))
+            ->assertSee('13.00');
     }
 
     #[Test]
