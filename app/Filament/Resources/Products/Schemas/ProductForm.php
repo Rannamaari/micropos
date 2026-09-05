@@ -2,22 +2,24 @@
 
 namespace App\Filament\Resources\Products\Schemas;
 
-use App\Filament\Support\AdminSupport;
 use App\Filament\Resources\InventoryOverview\InventoryOverviewResource;
-use App\Models\Product;
+use App\Filament\Support\AdminSupport;
 use App\Models\Branch;
+use App\Models\Product;
+use App\Models\Warehouse;
 use App\Services\InventoryQueryService;
 use App\Support\InventoryStatus;
 use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\ViewField;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Schemas\Schema;
+use Filament\Forms\Components\ViewField;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
 use Illuminate\Validation\Rule;
 
 class ProductForm
@@ -102,6 +104,36 @@ class ProductForm
                                     ->columnSpanFull(),
                             ]),
                     ]),
+                Section::make('Opening Stock')
+                    ->description('Optional. Records the product quantity currently on hand in the selected warehouse.')
+                    ->visibleOn('create')
+                    ->visible(fn (Get $get): bool => (bool) $get('track_inventory'))
+                    ->dehydratedWhenHidden(false)
+                    ->schema([
+                        Select::make('opening_warehouse_id')
+                            ->label('Warehouse')
+                            ->options(fn (): array => Warehouse::query()
+                                ->where('company_id', AdminSupport::companyId())
+                                ->where('is_active', true)
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all())
+                            ->default(fn (): ?string => AdminSupport::activeWarehouseId())
+                            ->searchable()
+                            ->required(fn (Get $get): bool => (float) $get('opening_quantity') > 0),
+                        TextInput::make('opening_quantity')
+                            ->label('Opening Quantity')
+                            ->numeric()
+                            ->minValue(0)
+                            ->default(0)
+                            ->helperText('Leave as 0 when there is no stock to record.'),
+                        TextInput::make('opening_unit_cost')
+                            ->label('Opening Unit Cost')
+                            ->numeric()
+                            ->minValue(0)
+                            ->helperText('Optional. Uses the product cost price when left blank.'),
+                    ])
+                    ->columns(3),
                 Section::make('Barcodes')
                     ->description('Use one primary barcode for scanner lookup and keep any alternate barcodes on the same product.')
                     ->schema([
