@@ -6,6 +6,8 @@ use App\Filament\Resources\Products\ProductResource;
 use App\Filament\Support\AdminSupport;
 use App\Models\Warehouse;
 use App\Services\InventoryService;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
@@ -75,6 +77,22 @@ class CreateProduct extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        return ProductResource::getUrl('edit', ['record' => $this->getRecord()]);
+        return ProductResource::getUrl('index');
+    }
+
+    protected function getCreatedNotification(): ?Notification
+    {
+        return Notification::make()
+            ->success()
+            ->title('Product added.')
+            ->body('Add another product or return to the product list.')
+            ->actions([
+                Action::make('add_another_product')
+                    ->label('Add Another Product')
+                    ->url(ProductResource::getUrl('create')),
+                Action::make('view_products')
+                    ->label('View Products')
+                    ->url(ProductResource::getUrl('index')),
+            ]);
     }
 }

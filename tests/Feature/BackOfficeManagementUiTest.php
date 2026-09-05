@@ -87,7 +87,8 @@ class BackOfficeManagementUiTest extends TestCase
                 ]],
             ])
             ->call('create')
-            ->assertHasNoFormErrors();
+            ->assertHasNoFormErrors()
+            ->assertRedirect('/admin/products');
 
         $product = Product::query()->where('sku', 'OPEN-100')->firstOrFail();
         $balance = InventoryBalance::query()
