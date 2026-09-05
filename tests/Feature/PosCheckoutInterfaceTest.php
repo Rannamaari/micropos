@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\SaleStatus;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Product;
@@ -43,7 +44,28 @@ class PosCheckoutInterfaceTest extends TestCase
             ->get('/pos')
             ->assertOk()
             ->assertSee('pos-app', false)
+            ->assertSee('<html lang="en" dir="ltr">', false)
             ->assertSee('Micro POS');
+    }
+
+    #[Test]
+    public function cashier_can_switch_the_pos_to_dhivehi_with_rtl_layout(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $cashier = $this->userWithRole('cashier', $warehouse);
+        Customer::factory()->walkIn()->create(['company_id' => $warehouse->company_id]);
+
+        $this->actingAs($cashier)
+            ->post('/locale/dv')
+            ->assertRedirect();
+
+        $this->actingAs($cashier)
+            ->get('/pos')
+            ->assertOk()
+            ->assertSee('dir="rtl"', false);
+
+        $this->assertSame('dv', app()->getLocale());
+        $this->assertSame('ޝިފްޓް އޯޕަން', __('pos.open_shift'));
     }
 
     #[Test]
@@ -438,7 +460,7 @@ class PosCheckoutInterfaceTest extends TestCase
             [
                 'client_transaction_uuid' => 'held-own-sale',
                 'customer_id' => $customer->id,
-                'status' => \App\Enums\SaleStatus::Held,
+                'status' => SaleStatus::Held,
                 'created_by' => $cashier->id,
             ],
         );
@@ -452,7 +474,7 @@ class PosCheckoutInterfaceTest extends TestCase
             [
                 'client_transaction_uuid' => 'held-other-sale',
                 'customer_id' => $customer->id,
-                'status' => \App\Enums\SaleStatus::Held,
+                'status' => SaleStatus::Held,
                 'created_by' => $otherCashier->id,
             ],
         );
@@ -638,6 +660,14 @@ class PosCheckoutInterfaceTest extends TestCase
             'client_transaction_uuid' => 'sale-yesterday-001',
         ]);
 
+        $otherCashierAtSameStore = $this->userWithRole('cashier', $warehouse);
+        $otherCashierSale = $this->createCompletedSale($warehouse, $product, $otherCashierAtSameStore, [
+            'sale_number' => 'SAL-OTHER-CASHIER-001',
+            'sale_date' => '2026-08-14',
+            'completed_at' => '2026-08-14 10:45:00',
+            'client_transaction_uuid' => 'sale-other-cashier-001',
+        ]);
+
         $otherCompany = Company::factory()->create();
         $otherWarehouse = Warehouse::factory()->create(['company_id' => $otherCompany->id]);
         $otherCashier = $this->userWithRole('cashier', $otherWarehouse);
@@ -663,6 +693,7 @@ class PosCheckoutInterfaceTest extends TestCase
 
         $this->assertTrue($saleNumbers->contains($todaySale->sale_number));
         $this->assertFalse($saleNumbers->contains($yesterdaySale->sale_number));
+        $this->assertFalse($saleNumbers->contains($otherCashierSale->sale_number));
         $this->assertFalse($saleNumbers->contains('SAL-OTHER-001'));
         $this->assertSame('today', $response['filters']['period']);
         $this->assertSame('2026-08-14', $response['filters']['date_from']);
@@ -709,7 +740,7 @@ class PosCheckoutInterfaceTest extends TestCase
             [],
             [
                 'client_transaction_uuid' => 'held-history-sale',
-                'status' => \App\Enums\SaleStatus::Held,
+                'status' => SaleStatus::Held,
                 'created_by' => $cashier->id,
             ],
         );
@@ -748,6 +779,13 @@ class PosCheckoutInterfaceTest extends TestCase
         $this->assertTrue(collect($cashOnly)->pluck('sale_number')->contains($cashSale->sale_number));
         $this->assertFalse(collect($cashOnly)->pluck('sale_number')->contains($cardSale->sale_number));
 
+        $managerHistory = $this->actingAs($manager)
+            ->getJson('/pos/api/sales?per_page=50')
+            ->assertOk()
+            ->json('data');
+        $this->assertTrue(collect($managerHistory)->pluck('sale_number')->contains($cashSale->sale_number));
+        $this->assertTrue(collect($managerHistory)->pluck('sale_number')->contains($cardSale->sale_number));
+
         $statusCompleted = $this->actingAs($cashier)
             ->getJson('/pos/api/sales?status=completed&search=SAL-HISTORY-100')
             ->assertOk()
@@ -779,7 +817,7 @@ class PosCheckoutInterfaceTest extends TestCase
             ->json();
         $this->assertCount(25, $paginated['data']);
         $this->assertSame(25, $paginated['meta']['per_page']);
-        $this->assertTrue($paginated['meta']['total'] >= 30);
+        $this->assertSame(29, $paginated['meta']['total']);
     }
 
     #[Test]

@@ -5,27 +5,27 @@ namespace App\Http\Controllers;
 use App\Enums\SaleStatus;
 use App\Exceptions\InventoryException;
 use App\Exceptions\TransactionException;
-use App\Models\Customer;
 use App\Models\CashierShift;
+use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
-use App\Models\SalePayment;
 use App\Models\SaleReturnItem;
-use App\Support\PosUserContextResolver;
-use App\Services\CustomerLedgerService;
+use App\Models\User;
 use App\Services\CashierShiftService;
+use App\Services\CustomerLedgerService;
 use App\Services\InventoryQueryService;
 use App\Services\NumberSequenceService;
 use App\Services\ProductSearchService;
 use App\Services\ReceiptProfileResolver;
 use App\Services\SalesService;
+use App\Support\PosUserContextResolver;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -269,7 +269,7 @@ class PosApiController extends Controller
 
         abort_unless($filters['status'] !== SaleStatus::Cancelled->value || $request->user()->can('sales.view_cancelled'), 403);
 
-        $sales = $this->buildSalesHistoryQuery($context['company_id'], $filters)
+        $sales = $this->buildSalesHistoryQuery($context['company_id'], $filters, $request->user())
             ->paginate($filters['per_page'])
             ->withQueryString();
 
@@ -665,7 +665,7 @@ class PosApiController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, Product>  $products
+     * @param  Collection<int, Product>  $products
      * @return array<int, array<string, mixed>>
      */
     private function transformProductsForPos(string $companyId, string $branchId, string $warehouseId, $products): array
@@ -947,7 +947,7 @@ class PosApiController extends Controller
     /**
      * @param  array<string, mixed>  $filters
      */
-    private function buildSalesHistoryQuery(string $companyId, array $filters): Builder
+    private function buildSalesHistoryQuery(string $companyId, array $filters, User $user): Builder
     {
         $search = $filters['search'];
         $customerFilter = $filters['customer'];
@@ -962,6 +962,10 @@ class PosApiController extends Controller
                 'payments:id,sale_id,payment_method',
             ])
             ->where('company_id', $companyId)
+            // Keep cashier history private while preserving manager and administrator oversight.
+            ->when(! $user->can('sales.cancel_held'), function (Builder $query) use ($user): void {
+                $query->where('created_by', $user->id);
+            })
             ->when($statusFilter, function (Builder $query) use ($statusFilter): void {
                 $query->where('status', $statusFilter);
             }, function (Builder $query): void {
