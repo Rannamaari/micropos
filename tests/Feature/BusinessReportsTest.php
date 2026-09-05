@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\SaleStatus;
+use App\Filament\Pages\BusinessReports;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
@@ -12,6 +13,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -87,6 +89,13 @@ class BusinessReportsTest extends TestCase
             ->assertSee('Daily Sales')
             ->assertSee(today()->subDay()->format('M d, Y'))
             ->assertSee('13.00');
+
+        Livewire::actingAs($admin)
+            ->test(BusinessReports::class)
+            ->call('selectDailySalesDate', today()->toDateString())
+            ->assertSee('Daily Item Sales Summary')
+            ->assertSee('Report Cola')
+            ->assertSee('REPORT-COLA');
     }
 
     #[Test]

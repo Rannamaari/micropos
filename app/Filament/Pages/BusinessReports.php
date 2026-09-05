@@ -9,6 +9,7 @@ use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\SaleReturn;
+use App\Models\SaleReturnItem;
 use Filament\Pages\Page;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -31,6 +32,8 @@ class BusinessReports extends Page
     public string $dateTo = '';
 
     public ?string $branchId = null;
+
+    public ?string $dailySalesDate = null;
 
     public static function canAccess(): bool
     {
@@ -72,13 +75,20 @@ class BusinessReports extends Page
         }
     }
 
+    public function selectDailySalesDate(string $date): void
+    {
+        abort_unless($date >= $this->dateFrom && $date <= $this->dateTo, 404);
+
+        $this->dailySalesDate = $date;
+    }
+
     /** @return array<string, mixed> */
     public function getReportProperty(): array
     {
         $branch = $this->selectedBranch();
 
         if (! $branch) {
-            return ['branch' => null, 'summary' => [], 'dailySales' => collect(), 'payments' => collect(), 'bestSellers' => collect(), 'lowStock' => collect()];
+            return ['branch' => null, 'summary' => [], 'dailySales' => collect(), 'dailyItemSales' => collect(), 'payments' => collect(), 'bestSellers' => collect(), 'lowStock' => collect()];
         }
 
         $sales = $this->salesQuery($branch);
@@ -141,6 +151,7 @@ class BusinessReports extends Page
                 'inventory_value' => $inventoryValue,
             ],
             'dailySales' => $this->dailySales($branch),
+            'dailyItemSales' => $this->dailySalesDate ? $this->dailyItemSales($branch, $this->dailySalesDate) : collect(),
             'payments' => $payments,
             'bestSellers' => $bestSellers,
             'lowStock' => $this->lowStock($branch),
@@ -227,6 +238,64 @@ class BusinessReports extends Page
                     'paid_total' => (float) $sale->paid_total,
                 ];
             });
+    }
+
+    /** @return Collection<int, array{product_name: string, sku: string, quantity_sold: float, quantity_returned: float, net_quantity: float, sales_total: float, returns_total: float, net_sales: float}> */
+    private function dailyItemSales(Branch $branch, string $date): Collection
+    {
+        $soldItems = SaleItem::query()
+            ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->leftJoin('products', 'products.id', '=', 'sale_items.product_id')
+            ->where('sales.company_id', $branch->company_id)
+            ->where('sales.branch_id', $branch->id)
+            ->whereIn('sales.status', $this->saleStatuses())
+            ->whereDate('sales.sale_date', $date)
+            ->select('sale_items.product_id', 'sale_items.description')
+            ->selectRaw("COALESCE(products.sku, '') as sku")
+            ->selectRaw('COALESCE(SUM(sale_items.quantity), 0) as quantity_sold, COALESCE(SUM(sale_items.line_total), 0) as sales_total')
+            ->groupBy('sale_items.product_id', 'sale_items.description', 'products.sku')
+            ->get()
+            ->keyBy('product_id');
+
+        $returnedItems = SaleReturnItem::query()
+            ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
+            ->join('sales', 'sales.id', '=', 'sale_returns.sale_id')
+            ->leftJoin('sale_items', 'sale_items.id', '=', 'sale_return_items.sale_item_id')
+            ->leftJoin('products', 'products.id', '=', 'sale_return_items.product_id')
+            ->where('sale_returns.company_id', $branch->company_id)
+            ->where('sales.branch_id', $branch->id)
+            ->whereDate('sale_returns.return_date', $date)
+            ->select('sale_return_items.product_id')
+            ->selectRaw("COALESCE(sale_items.description, products.name, 'Deleted product') as product_name")
+            ->selectRaw("COALESCE(products.sku, '') as sku")
+            ->selectRaw('COALESCE(SUM(sale_return_items.quantity), 0) as quantity_returned, COALESCE(SUM(sale_return_items.line_total), 0) as returns_total')
+            ->groupBy('sale_return_items.product_id', 'sale_items.description', 'products.name', 'products.sku')
+            ->get()
+            ->keyBy('product_id');
+
+        return $soldItems
+            ->union($returnedItems)
+            ->map(function (object $item, string $productId) use ($soldItems, $returnedItems): array {
+                $sold = $soldItems->get($productId);
+                $returned = $returnedItems->get($productId);
+                $quantitySold = (float) ($sold?->quantity_sold ?? 0);
+                $quantityReturned = (float) ($returned?->quantity_returned ?? 0);
+                $salesTotal = (float) ($sold?->sales_total ?? 0);
+                $returnsTotal = (float) ($returned?->returns_total ?? 0);
+
+                return [
+                    'product_name' => $sold?->description ?? $returned?->product_name ?? 'Deleted product',
+                    'sku' => $sold?->sku ?? $returned?->sku ?? '',
+                    'quantity_sold' => $quantitySold,
+                    'quantity_returned' => $quantityReturned,
+                    'net_quantity' => $quantitySold - $quantityReturned,
+                    'sales_total' => $salesTotal,
+                    'returns_total' => $returnsTotal,
+                    'net_sales' => $salesTotal - $returnsTotal,
+                ];
+            })
+            ->sortByDesc('net_sales')
+            ->values();
     }
 
     private function lowStock(Branch $branch): Collection
