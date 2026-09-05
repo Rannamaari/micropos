@@ -2,18 +2,22 @@
 
 namespace Tests\Feature;
 
+use App\Enums\StockMovementType;
+use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Filament\Resources\Purchases\Pages\ViewPurchase;
 use App\Models\Company;
+use App\Models\InventoryBalance;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
+use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\PurchaseService;
-use Database\Seeders\RolesAndPermissionsSeeder;
 use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -46,6 +50,74 @@ class BackOfficeManagementUiTest extends TestCase
         $this->actingAs($user)
             ->get('/admin')
             ->assertOk();
+    }
+
+    #[Test]
+    public function product_creation_can_record_opening_stock_for_its_warehouse(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $user = $this->userWithRole('admin', $warehouse);
+        $unit = Unit::factory()->create();
+
+        Livewire::actingAs($user)
+            ->test(CreateProduct::class)
+            ->fillForm([
+                'company_id' => $warehouse->company_id,
+                'name' => 'Opening Stock Product',
+                'sku' => 'OPEN-100',
+                'unit_id' => $unit->id,
+                'cost_price' => 8,
+                'selling_price' => 12,
+                'track_inventory' => true,
+                'is_active' => true,
+                'opening_warehouse_id' => $warehouse->id,
+                'opening_quantity' => 14,
+                'opening_unit_cost' => 7.5,
+                'branchPrices' => [[
+                    'branch_id' => $warehouse->branch_id,
+                    'currency' => $warehouse->branch->currency,
+                    'cost_price' => 8,
+                    'selling_price' => 12,
+                    'company_id' => $warehouse->company_id,
+                ]],
+                'barcodes' => [[
+                    'barcode' => '1234567890123',
+                    'is_primary' => true,
+                    'company_id' => $warehouse->company_id,
+                ]],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $product = Product::query()->where('sku', 'OPEN-100')->firstOrFail();
+        $balance = InventoryBalance::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->firstOrFail();
+        $movement = StockMovement::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->where('type', StockMovementType::Opening)
+            ->firstOrFail();
+
+        $this->assertSame('14.0000', $balance->quantity);
+        $this->assertSame('14.0000', $movement->quantity);
+        $this->assertSame('7.5000', $movement->unit_cost);
+    }
+
+    #[Test]
+    public function admin_navigation_uses_dhivehi_after_switching_locale(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $user = $this->userWithRole('admin', $warehouse);
+
+        $this->actingAs($user)->post('/locale/dv')->assertRedirect();
+
+        $this->actingAs($user)
+            ->get('/admin')
+            ->assertOk()
+            ->assertSee('ޑޭޝްބޯޑް')
+            ->assertSee('ކެޓަލޮގް');
     }
 
     #[Test]
