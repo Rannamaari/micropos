@@ -45,6 +45,7 @@ class PosCheckoutInterfaceTest extends TestCase
             ->assertOk()
             ->assertSee('pos-app', false)
             ->assertSee('<html lang="en" dir="ltr">', false)
+            ->assertSee('"can_access_admin":false', false)
             ->assertSee('Micro POS');
     }
 
@@ -66,6 +67,19 @@ class PosCheckoutInterfaceTest extends TestCase
 
         $this->assertSame('dv', app()->getLocale());
         $this->assertSame('ޝިފްޓް އޯޕަން', __('pos.open_shift'));
+    }
+
+    #[Test]
+    public function admin_pos_users_receive_the_back_office_link_flag(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $admin = $this->userWithRole('admin', $warehouse);
+        Customer::factory()->walkIn()->create(['company_id' => $warehouse->company_id]);
+
+        $this->actingAs($admin)
+            ->get('/pos')
+            ->assertOk()
+            ->assertSee('"can_access_admin":true', false);
     }
 
     #[Test]

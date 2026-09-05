@@ -33,6 +33,7 @@ class PosPageController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
+                    'can_access_admin' => $user->hasAnyRole(['super-admin', 'admin', 'manager']),
                 ],
                 'locale' => app()->getLocale(),
                 'translations' => trans('pos'),

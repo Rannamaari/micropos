@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'admin' => 'Admin',
     'open_shift' => 'Open Shift', 'end_of_day' => 'EOD / End Shift', 'held_sales' => 'Held Sales', 'sales_history' => 'Sales History', 'shortcuts' => 'Shortcuts', 'sign_out' => 'Sign Out',
     'search_scan' => 'Search / Scan', 'search_placeholder' => 'Scan barcode or search by name / SKU', 'products' => 'Products', 'current_sale' => 'Current Sale', 'new_sale' => 'New Sale',
     'customer' => 'Customer', 'walk_in_customer' => 'Walk-in Customer', 'remove' => 'Remove', 'hold_sale' => 'Hold Sale', 'payment' => 'Payment', 'cash_tendered' => 'Cash Tendered',

@@ -90,6 +90,7 @@ onBeforeUnmount(() => clearInterval(timer));
             </div>
 
             <div class="flex gap-2 overflow-x-auto pb-1 xl:flex-wrap xl:overflow-visible xl:pb-0">
+                <a v-if="store.bootstrap.user?.can_access_admin" href="/admin" class="pos-button-secondary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base">{{ store.t('admin') }}</a>
                 <button class="pos-button-secondary pos-language-toggle min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="toggleLocale">{{ isDhivehi ? 'EN' : 'DV' }}</button>
                 <button v-if="store.hasActiveShift" class="pos-button-primary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('close-shift')">{{ store.t('end_of_day') }}</button>
                 <button v-else class="pos-button-primary min-h-11 shrink-0 px-3 py-2 text-sm md:px-4 md:py-3 md:text-base" @click="emit('open-shift')">{{ store.t('open_shift') }}</button>

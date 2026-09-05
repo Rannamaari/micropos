@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'admin' => 'އިދާރީ ކަންކަން',
     'open_shift' => 'ޝިފްޓް އޯޕަން', 'end_of_day' => 'އެންޑް އޮފް ޑޭ', 'held_sales' => 'ހޯލްޑް ސޭލްސް', 'sales_history' => 'ކުރީގެ ސޭލްސް', 'shortcuts' => 'ޝޯޓްކަޓްތައް', 'sign_out' => 'ސައިން އައުޓް',
     'search_scan' => 'ހޯދާ / ސްކޭން ކުރޭ', 'search_placeholder' => 'ބާކޯޑް ސްކޭން ކުރޭ ނުވަތަ ނަމުން / SKU އިން ހޯދާ', 'products' => 'މުދާތައް', 'current_sale' => 'މިހާރުގެ ވިއްކުން', 'new_sale' => 'އައު ވިއްކުން',
     'customer' => 'ކަސްޓަމާރ', 'walk_in_customer' => 'ވޯކްއިން ކަސްޓަމަރ', 'remove' => 'ނައްތާލާ', 'hold_sale' => 'ވިއްކުން ހޯލްޑް ކުރޭ', 'payment' => 'ފައިސާ ދެއްކުން', 'cash_tendered' => 'ދެއްކި ކޭޝް',
