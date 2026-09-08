@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\InventoryOverview\Tables;
 
-use App\Enums\StockMovementType;
 use App\Filament\Resources\InventoryOverview\Pages\ListInventoryOverview;
 use App\Filament\Resources\Products\ProductResource;
 use App\Filament\Resources\StockMovements\StockMovementResource;
@@ -10,13 +9,12 @@ use App\Filament\Support\AdminSupport;
 use App\Models\Product;
 use App\Services\InventoryService;
 use App\Support\InventoryStatus;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Filament\Actions\Action;
-use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\SelectFilter;
@@ -158,13 +156,27 @@ class InventoryOverviewTable
                         Notification::make()->title('Opening stock recorded.')->success()->send();
                     }),
                 Action::make('adjustStock')
-                    ->label('Adjust Stock')
+                    ->label('Adjust Qty')
                     ->icon('heroicon-o-pencil-square')
                     ->visible(fn (): bool => auth()->user()?->can('inventory.adjust') ?? false)
+                    ->slideOver()
+                    ->modalHeading('Adjust Stock Quantity')
+                    ->modalDescription('Enter the physical quantity currently on hand. The difference is recorded as an adjustment.')
+                    ->modalSubmitActionLabel('Save Quantity')
                     ->schema([
                         Placeholder::make('warehouse')->content(fn (ListInventoryOverview $livewire): string => static::selectedWarehouseName($livewire)),
-                        Placeholder::make('current_stock')->content(fn (Product $record): string => number_format((float) $record->current_quantity, 4, '.', '')),
-                        TextInput::make('actual_quantity')->required()->numeric()->minValue(0),
+                        Placeholder::make('current_stock')
+                            ->label('Current Quantity')
+                            ->content(fn (Product $record): string => number_format((float) $record->current_quantity, 4, '.', '')),
+                        TextInput::make('actual_quantity')
+                            ->label('New Quantity')
+                            ->helperText('This replaces the current quantity with the counted amount.')
+                            ->default(fn (Product $record): float => (float) $record->current_quantity)
+                            ->required()
+                            ->numeric()
+                            ->inputMode('decimal')
+                            ->step('0.0001')
+                            ->minValue(0),
                         Select::make('reason')
                             ->options([
                                 'Physical count correction' => 'Physical count correction',

@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\Products\Tables;
 
+use App\Filament\Resources\Products\ProductResource;
 use App\Models\Product;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -72,10 +74,14 @@ class ProductsTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                DeleteAction::make()
+                    ->modalDescription('Products with sales, purchasing, or inventory history cannot be deleted.'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->fetchSelectedRecords()
+                        ->authorizeIndividualRecords(fn (Product $record): bool => ProductResource::canDelete($record)),
                 ]),
             ])
             ->defaultSort('name')

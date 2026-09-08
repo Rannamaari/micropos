@@ -16,6 +16,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
 class ProductResource extends BaseResource
@@ -58,7 +59,16 @@ class ProductResource extends BaseResource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['category', 'brand', 'unit', 'primaryBarcode']);
+        return parent::getEloquentQuery()
+            ->with(['category', 'brand', 'unit', 'primaryBarcode'])
+            ->withCount(['saleItems', 'purchaseItems', 'stockMovements', 'stockCountItems', 'inventoryBalances']);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return $record instanceof Product
+            && $record->deletionBlockReason() === null
+            && parent::canDelete($record);
     }
 
     public static function getPages(): array

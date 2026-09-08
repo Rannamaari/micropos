@@ -21,7 +21,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
-use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Unique;
 
 class ProductForm
 {
@@ -58,9 +58,12 @@ class ProductForm
                                 TextInput::make('sku')
                                     ->required()
                                     ->maxLength(255)
-                                    ->rule(fn () => Rule::unique('products', 'sku')
-                                        ->where('company_id', AdminSupport::companyId())
-                                        ->ignore(request()->route('record'))),
+                                    ->unique(
+                                        table: 'products',
+                                        column: 'sku',
+                                        ignoreRecord: true,
+                                        modifyRuleUsing: fn (Unique $rule) => $rule->where('company_id', AdminSupport::companyId()),
+                                    ),
                                 Select::make('category_id')
                                     ->options(fn (): array => AdminSupport::categoryOptions())
                                     ->searchable()

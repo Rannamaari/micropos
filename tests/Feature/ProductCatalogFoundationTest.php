@@ -2,13 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Models\Branch;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Company;
-use App\Models\Branch;
 use App\Models\Product;
 use App\Models\ProductBarcode;
 use App\Models\ProductBranchPrice;
+use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\Unit;
 use App\Models\Warehouse;
 use App\Services\CsvDataImportService;
@@ -21,6 +23,7 @@ use Database\Seeders\UnitsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
+use LogicException;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -151,6 +154,30 @@ class ProductCatalogFoundationTest extends TestCase
 
         $this->assertDatabaseMissing('products', ['id' => $product->id]);
         $this->assertDatabaseMissing('product_branch_prices', ['id' => $branchPrice->id]);
+    }
+
+    #[Test]
+    public function deleting_a_product_with_sales_history_is_not_allowed(): void
+    {
+        $company = Company::factory()->create();
+        $warehouse = Warehouse::factory()->create(['company_id' => $company->id]);
+        $product = Product::factory()->create(['company_id' => $company->id, 'unit_id' => Unit::factory()->create()->id]);
+        $sale = Sale::factory()->create([
+            'company_id' => $company->id,
+            'branch_id' => $warehouse->branch_id,
+            'warehouse_id' => $warehouse->id,
+        ]);
+
+        SaleItem::factory()->create([
+            'company_id' => $company->id,
+            'sale_id' => $sale->id,
+            'product_id' => $product->id,
+        ]);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('This product has sales history and cannot be deleted.');
+
+        $product->delete();
     }
 
     #[Test]

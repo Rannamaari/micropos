@@ -11,7 +11,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
+use LogicException;
 
 class Product extends Model
 {
@@ -59,10 +61,13 @@ class Product extends Model
     protected static function booted(): void
     {
         static::deleting(function (Product $product): void {
-            // SQLite test databases cannot alter this foreign key; production uses its cascade constraint.
-            if ($product->getConnection()->getDriverName() === 'sqlite') {
-                $product->branchPrices()->delete();
+            if ($reason = $product->deletionBlockReason()) {
+                throw new LogicException($reason);
             }
+
+            // Store-specific prices are configuration, not transaction history. Remove them before
+            // deleting so older databases with a restrictive foreign key can delete unused products.
+            $product->branchPrices()->delete();
         });
 
         static::saving(function (Product $product): void {
@@ -150,6 +155,34 @@ class Product extends Model
     public function saleItems(): HasMany
     {
         return $this->hasMany(SaleItem::class);
+    }
+
+    public function deletionBlockReason(): ?string
+    {
+        if ($this->hasRelatedRecords('saleItems')) {
+            return 'This product has sales history and cannot be deleted.';
+        }
+
+        if ($this->hasRelatedRecords('purchaseItems')) {
+            return 'This product has purchase history and cannot be deleted.';
+        }
+
+        if ($this->hasRelatedRecords('stockMovements') || $this->hasRelatedRecords('stockCountItems') || $this->hasRelatedRecords('inventoryBalances')) {
+            return 'This product has inventory history and cannot be deleted.';
+        }
+
+        return null;
+    }
+
+    private function hasRelatedRecords(string $relation): bool
+    {
+        $countAttribute = Str::snake($relation).'_count';
+
+        if (array_key_exists($countAttribute, $this->attributes)) {
+            return (int) $this->getAttribute($countAttribute) > 0;
+        }
+
+        return $this->{$relation}()->exists();
     }
 
     public function scopeActive(Builder $query): Builder

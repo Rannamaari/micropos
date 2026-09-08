@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\StockMovementType;
 use App\Filament\Resources\Products\Pages\CreateProduct;
+use App\Filament\Resources\Products\Pages\EditProduct;
 use App\Filament\Resources\Purchases\Pages\ViewPurchase;
 use App\Models\Company;
 use App\Models\InventoryBalance;
@@ -104,6 +105,27 @@ class BackOfficeManagementUiTest extends TestCase
         $this->assertSame('14.0000', $balance->quantity);
         $this->assertSame('14.0000', $movement->quantity);
         $this->assertSame('7.5000', $movement->unit_cost);
+    }
+
+    #[Test]
+    public function product_price_can_be_updated_without_triggering_a_duplicate_sku_error(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $user = $this->userWithRole('admin', $warehouse);
+        $product = Product::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'unit_id' => Unit::factory()->create()->id,
+            'sku' => 'PRICE-UPDATE-100',
+            'selling_price' => 10,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(EditProduct::class, ['record' => $product->id])
+            ->fillForm(['selling_price' => 15])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('15.0000', $product->fresh()->selling_price);
     }
 
     #[Test]
