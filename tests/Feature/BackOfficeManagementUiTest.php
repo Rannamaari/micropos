@@ -16,6 +16,7 @@ use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\InventoryService;
 use App\Services\PurchaseService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -126,6 +127,57 @@ class BackOfficeManagementUiTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertSame('15.0000', $product->fresh()->selling_price);
+    }
+
+    #[Test]
+    public function product_with_inventory_history_is_kept_when_delete_is_requested(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $user = $this->userWithRole('admin', $warehouse);
+        $product = Product::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'unit_id' => Unit::factory()->create()->id,
+        ]);
+
+        app(InventoryService::class)->setOpeningStock(
+            $warehouse->company_id,
+            $warehouse->id,
+            $product->id,
+            4,
+            5,
+        );
+
+        Livewire::actingAs($user)
+            ->test(EditProduct::class, ['record' => $product->id])
+            ->callAction('deleteProduct');
+
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
+    }
+
+    #[Test]
+    public function super_admin_can_purge_an_inventory_only_test_product(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $user = $this->userWithRole('super-admin', $warehouse);
+        $product = Product::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'unit_id' => Unit::factory()->create()->id,
+            'sku' => 'PURGE-TEST-001',
+        ]);
+
+        app(InventoryService::class)->setOpeningStock(
+            $warehouse->company_id,
+            $warehouse->id,
+            $product->id,
+            4,
+            5,
+        );
+
+        Livewire::actingAs($user)
+            ->test(EditProduct::class, ['record' => $product->id])
+            ->callAction('purgeTestProduct', data: ['sku_confirmation' => $product->sku]);
+
+        $this->assertDatabaseMissing('products', ['id' => $product->id]);
     }
 
     #[Test]

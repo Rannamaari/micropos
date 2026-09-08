@@ -71,6 +71,17 @@ class ProductResource extends BaseResource
             && parent::canDelete($record);
     }
 
+    public static function deletionBlockMessage(Product $record): ?string
+    {
+        $reason = $record->fresh()?->deletionBlockReason();
+
+        if (! $reason) {
+            return null;
+        }
+
+        return $reason.' Keep the historical records for audit purposes. To stop using this product, turn off Is active and save the product instead.';
+    }
+
     public static function getPages(): array
     {
         return [

@@ -4,11 +4,12 @@ namespace App\Filament\Resources\Products\Tables;
 
 use App\Filament\Resources\Products\ProductResource;
 use App\Models\Product;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -74,8 +75,31 @@ class ProductsTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
-                DeleteAction::make()
-                    ->modalDescription('Products with sales, purchasing, or inventory history cannot be deleted.'),
+                Action::make('deleteProduct')
+                    ->label('Delete')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->visible(fn (): bool => auth()->user()?->can('products.deactivate') ?? false)
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (Product $record): string => "Delete {$record->name}")
+                    ->modalDescription(fn (Product $record): string => ProductResource::deletionBlockMessage($record) ?? 'This permanently removes the product and its store-specific prices.')
+                    ->modalSubmitActionLabel(fn (Product $record): string => ProductResource::deletionBlockMessage($record) ? 'Keep Product' : 'Delete Product')
+                    ->action(function (Product $record): void {
+                        if ($message = ProductResource::deletionBlockMessage($record)) {
+                            Notification::make()
+                                ->title('Product cannot be deleted')
+                                ->body($message)
+                                ->warning()
+                                ->persistent()
+                                ->send();
+
+                            return;
+                        }
+
+                        $record->delete();
+
+                        Notification::make()->title('Product deleted.')->success()->send();
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

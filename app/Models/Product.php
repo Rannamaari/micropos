@@ -61,7 +61,8 @@ class Product extends Model
     protected static function booted(): void
     {
         static::deleting(function (Product $product): void {
-            if ($reason = $product->deletionBlockReason()) {
+            // Check the database state again at deletion time, not an earlier catalog count.
+            if ($reason = $product->fresh()?->deletionBlockReason()) {
                 throw new LogicException($reason);
             }
 

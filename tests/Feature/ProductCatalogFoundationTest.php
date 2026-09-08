@@ -16,6 +16,7 @@ use App\Models\Warehouse;
 use App\Services\CsvDataImportService;
 use App\Services\InventoryService;
 use App\Services\ProductImportService;
+use App\Services\ProductPurgeService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\LargeProductCatalogSeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -178,6 +179,30 @@ class ProductCatalogFoundationTest extends TestCase
         $this->expectExceptionMessage('This product has sales history and cannot be deleted.');
 
         $product->delete();
+    }
+
+    #[Test]
+    public function inventory_only_test_product_can_be_purged(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $product = Product::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'unit_id' => Unit::factory()->create()->id,
+        ]);
+
+        app(InventoryService::class)->setOpeningStock(
+            $warehouse->company_id,
+            $warehouse->id,
+            $product->id,
+            5,
+            8,
+        );
+
+        app(ProductPurgeService::class)->purgeInventoryOnlyProduct($product);
+
+        $this->assertDatabaseMissing('products', ['id' => $product->id]);
+        $this->assertDatabaseMissing('inventory_balances', ['product_id' => $product->id]);
+        $this->assertDatabaseMissing('stock_movements', ['product_id' => $product->id]);
     }
 
     #[Test]
