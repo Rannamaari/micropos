@@ -94,8 +94,12 @@ class BusinessReportsTest extends TestCase
             ->test(BusinessReports::class)
             ->call('selectDailySalesDate', today()->toDateString())
             ->assertSee('Daily Item Sales Summary')
+            ->assertSee('Daily Transaction Details')
+            ->assertSee('Payment Method')
             ->assertSee('Report Cola')
-            ->assertSee('REPORT-COLA');
+            ->assertSee('REPORT-COLA')
+            ->assertSee($sale->sale_number)
+            ->assertSee('Cash');
     }
 
     #[Test]

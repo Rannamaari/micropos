@@ -88,7 +88,7 @@ class BusinessReports extends Page
         $branch = $this->selectedBranch();
 
         if (! $branch) {
-            return ['branch' => null, 'summary' => [], 'dailySales' => collect(), 'dailyItemSales' => collect(), 'payments' => collect(), 'bestSellers' => collect(), 'lowStock' => collect()];
+            return ['branch' => null, 'summary' => [], 'dailySales' => collect(), 'dailyItemSales' => collect(), 'dailyTransactions' => collect(), 'payments' => collect(), 'bestSellers' => collect(), 'lowStock' => collect()];
         }
 
         $sales = $this->salesQuery($branch);
@@ -152,6 +152,7 @@ class BusinessReports extends Page
             ],
             'dailySales' => $this->dailySales($branch),
             'dailyItemSales' => $this->dailySalesDate ? $this->dailyItemSales($branch, $this->dailySalesDate) : collect(),
+            'dailyTransactions' => $this->dailySalesDate ? $this->dailyTransactions($branch, $this->dailySalesDate) : collect(),
             'payments' => $payments,
             'bestSellers' => $bestSellers,
             'lowStock' => $this->lowStock($branch),
@@ -296,6 +297,55 @@ class BusinessReports extends Page
             })
             ->sortByDesc('net_sales')
             ->values();
+    }
+
+    /** @return Collection<int, array{sale_number: string, completed_at: ?string, customer: string, cashier: string, status: string, subtotal: float, tax: float, grand_total: float, paid_total: float, balance_due: float, payment_methods: string}> */
+    private function dailyTransactions(Branch $branch, string $date): Collection
+    {
+        return Sale::query()
+            ->with([
+                'customer:id,name',
+                'creator:id,name',
+                'payments:id,sale_id,payment_method',
+            ])
+            ->where('company_id', $branch->company_id)
+            ->where('branch_id', $branch->id)
+            ->whereIn('status', $this->saleStatuses())
+            ->whereDate('sale_date', $date)
+            ->orderByDesc('completed_at')
+            ->orderByDesc('created_at')
+            ->get([
+                'id',
+                'sale_number',
+                'status',
+                'completed_at',
+                'created_at',
+                'customer_id',
+                'created_by',
+                'subtotal',
+                'tax_total',
+                'grand_total',
+                'paid_total',
+                'balance_due',
+            ])
+            ->map(fn (Sale $sale): array => [
+                'sale_number' => $sale->sale_number,
+                'completed_at' => ($sale->completed_at ?? $sale->created_at)?->format('g:i A'),
+                'customer' => $sale->customer?->name ?? 'Walk-in customer',
+                'cashier' => $sale->creator?->name ?? '—',
+                'status' => $sale->status instanceof \BackedEnum ? $sale->status->value : (string) $sale->status,
+                'subtotal' => (float) $sale->subtotal,
+                'tax' => (float) $sale->tax_total,
+                'grand_total' => (float) $sale->grand_total,
+                'paid_total' => (float) $sale->paid_total,
+                'balance_due' => (float) $sale->balance_due,
+                'payment_methods' => $sale->payments
+                    ->pluck('payment_method')
+                    ->filter()
+                    ->unique()
+                    ->map(fn (string $method): string => ucwords(str_replace('_', ' ', $method)))
+                    ->implode(', ') ?: '—',
+            ]);
     }
 
     private function lowStock(Branch $branch): Collection
