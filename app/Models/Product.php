@@ -35,6 +35,10 @@ class Product extends Model
         'selling_price',
         'wholesale_price',
         'tax_rate',
+        'discount_eligible',
+        'normal_discount_price',
+        'vip_discount_price',
+        'vvip_discount_price',
         'minimum_stock',
         'allow_negative_stock',
         'track_inventory',
@@ -51,6 +55,10 @@ class Product extends Model
             'selling_price' => 'decimal:4',
             'wholesale_price' => 'decimal:4',
             'tax_rate' => 'decimal:4',
+            'discount_eligible' => 'boolean',
+            'normal_discount_price' => 'decimal:4',
+            'vip_discount_price' => 'decimal:4',
+            'vvip_discount_price' => 'decimal:4',
             'minimum_stock' => 'decimal:4',
             'allow_negative_stock' => 'boolean',
             'track_inventory' => 'boolean',
@@ -72,7 +80,7 @@ class Product extends Model
         });
 
         static::saving(function (Product $product): void {
-            foreach (['cost_price', 'selling_price', 'wholesale_price', 'tax_rate', 'minimum_stock'] as $field) {
+            foreach (['cost_price', 'selling_price', 'wholesale_price', 'tax_rate', 'minimum_stock', 'normal_discount_price', 'vip_discount_price', 'vvip_discount_price'] as $field) {
                 $value = $product->{$field};
 
                 if ($value !== null && (float) $value < 0) {

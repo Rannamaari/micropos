@@ -53,13 +53,26 @@ const lineTotal = computed(() => {
                     >
                 </label>
                 <label class="min-w-0 text-sm text-[var(--pos-muted)]">
-                    Discount
+                    <span class="flex items-center justify-between gap-2">
+                        Discount
+                        <button
+                            v-if="item.discount?.eligible"
+                            type="button"
+                            class="rounded-lg border border-amber-300/40 px-2 py-1 text-xs font-semibold text-amber-200 transition hover:bg-amber-300/10"
+                            @click="store.applyCustomerDiscount(item.productId)"
+                        >
+                            Apply {{ store.customerDiscountTier.toUpperCase() }}
+                        </button>
+                    </span>
                     <input
                         class="pos-input mt-1"
                         :disabled="!store.canDiscount"
                         :value="item.discountAmount"
                         @change="store.updateItemDiscount(item.productId, $event.target.value)"
                     >
+                    <span v-if="item.appliedDiscountTier" class="mt-1 block text-xs text-amber-200">
+                        {{ item.appliedDiscountTier.toUpperCase() }} price applied
+                    </span>
                 </label>
                 <div class="min-w-0 text-sm text-[var(--pos-muted)]">
                     Tax

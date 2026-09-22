@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CustomerTransactionType;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -32,6 +33,7 @@ class Customer extends Model
         'notes',
         'is_active',
         'is_walk_in',
+        'discount_tier',
     ];
 
     /**
@@ -50,6 +52,12 @@ class Customer extends Model
     protected static function booted(): void
     {
         static::saving(function (Customer $customer): void {
+            $customer->discount_tier ??= 'normal';
+
+            if (! in_array($customer->discount_tier, ['normal', 'vip', 'vvip'], true)) {
+                throw new \InvalidArgumentException('Customer discount tier must be normal, vip, or vvip.');
+            }
+
             if ($customer->is_walk_in) {
                 if (static::query()
                     ->where('company_id', $customer->company_id)
@@ -66,7 +74,7 @@ class Customer extends Model
                 CustomerTransaction::query()->create([
                     'company_id' => $customer->company_id,
                     'customer_id' => $customer->id,
-                    'type' => \App\Enums\CustomerTransactionType::OpeningBalance,
+                    'type' => CustomerTransactionType::OpeningBalance,
                     'amount' => $customer->opening_balance,
                     'reference_type' => self::class,
                     'reference_id' => $customer->id,

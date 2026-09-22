@@ -214,6 +214,106 @@ class PosCheckoutInterfaceTest extends TestCase
         $this->assertDatabaseHas('customers', [
             'company_id' => $warehouse->company_id,
             'name' => 'New Counter Customer',
+            'discount_tier' => 'normal',
+        ]);
+    }
+
+    #[Test]
+    public function eligible_product_uses_the_selected_customers_tier_price_and_taxes_the_discounted_amount(): void
+    {
+        [$warehouse, $product] = $this->warehouseAndProduct(sellingPrice: 100);
+        $product->update([
+            'tax_rate' => 10,
+            'discount_eligible' => true,
+            'vip_discount_price' => 80,
+        ]);
+        app(InventoryService::class)->setOpeningStock($warehouse->company_id, $warehouse->id, $product->id, 10, 6);
+
+        $customer = Customer::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'discount_tier' => 'vip',
+        ]);
+        $cashier = $this->userWithRole('cashier', $warehouse);
+        $this->openShift($cashier);
+
+        $this->actingAs($cashier)
+            ->postJson('/pos/api/sales', [
+                'client_transaction_uuid' => 'vip-tier-price-1',
+                'customer_id' => $customer->id,
+                'items' => [[
+                    'product_id' => $product->id,
+                    'quantity' => 2,
+                    'unit_price' => 100,
+                    'discount_amount' => 0,
+                    'discount_tier' => 'vip',
+                ]],
+                'payments' => [[
+                    'payment_method' => 'cash',
+                    'amount' => 176,
+                    'amount_tendered' => 176,
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.grand_total', '176.0000');
+
+        $this->assertDatabaseHas('sale_items', [
+            'product_id' => $product->id,
+            'unit_price' => '100.0000',
+            'discount_amount' => '40.0000',
+            'tax_amount' => '16.0000',
+            'line_total' => '176.0000',
+        ]);
+    }
+
+    #[Test]
+    public function tier_discounts_cannot_be_claimed_for_a_different_customer_tier_or_when_no_tier_price_exists(): void
+    {
+        [$warehouse, $product] = $this->warehouseAndProduct(sellingPrice: 100);
+        $product->update([
+            'discount_eligible' => true,
+            'vip_discount_price' => 80,
+        ]);
+        app(InventoryService::class)->setOpeningStock($warehouse->company_id, $warehouse->id, $product->id, 10, 6);
+
+        $customer = Customer::factory()->create([
+            'company_id' => $warehouse->company_id,
+            'discount_tier' => 'normal',
+        ]);
+        $cashier = $this->userWithRole('cashier', $warehouse);
+        $this->openShift($cashier);
+
+        $this->actingAs($cashier)
+            ->postJson('/pos/api/sales', [
+                'client_transaction_uuid' => 'reject-vip-tier-1',
+                'customer_id' => $customer->id,
+                'items' => [[
+                    'product_id' => $product->id,
+                    'quantity' => 1,
+                    'discount_tier' => 'vip',
+                ]],
+                'payments' => [['payment_method' => 'cash', 'amount' => 100]],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.discount.0', 'The selected discount tier does not match the customer.');
+
+        $this->actingAs($cashier)
+            ->postJson('/pos/api/sales', [
+                'client_transaction_uuid' => 'normal-fallback-1',
+                'customer_id' => $customer->id,
+                'items' => [[
+                    'product_id' => $product->id,
+                    'quantity' => 1,
+                    'discount_tier' => 'normal',
+                ]],
+                'payments' => [['payment_method' => 'cash', 'amount' => 100]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.grand_total', '100.0000');
+
+        $this->assertDatabaseHas('sale_items', [
+            'product_id' => $product->id,
+            'discount_amount' => '0.0000',
+            'line_total' => '100.0000',
         ]);
     }
 
@@ -266,6 +366,68 @@ class PosCheckoutInterfaceTest extends TestCase
 
         $this->assertDatabaseCount('sales', 1);
         $this->assertSame('8.0000', app(InventoryService::class)->getBalance($warehouse->company_id, $warehouse->id, $product->id));
+    }
+
+    #[Test]
+    public function sale_and_cashier_shift_reconcile_primary_and_secondary_cash_currencies(): void
+    {
+        [$warehouse, $product] = $this->warehouseAndProduct(sellingPrice: 10);
+        $warehouse->branch->update([
+            'currency' => 'USD',
+            'secondary_currency' => 'MVR',
+            'secondary_currency_rate' => 15.42,
+        ]);
+        app(InventoryService::class)->setOpeningStock($warehouse->company_id, $warehouse->id, $product->id, 5, 6);
+
+        $cashier = $this->userWithRole('cashier', $warehouse);
+        $openResponse = $this->actingAs($cashier)
+            ->postJson('/pos/api/shifts/open', [
+                'opening_cash_by_currency' => ['USD' => 100, 'MVR' => 1000],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.opening_cash_by_currency.USD', '100.0000')
+            ->assertJsonPath('data.opening_cash_by_currency.MVR', '1000.0000')
+            ->json('data');
+
+        $sale = $this->actingAs($cashier)
+            ->postJson('/pos/api/sales', [
+                'client_transaction_uuid' => 'mvr-payment-on-usd-sale-1',
+                'items' => [['product_id' => $product->id, 'quantity' => 1]],
+                'payments' => [[
+                    'payment_method' => 'cash',
+                    'currency' => 'MVR',
+                    'currency_amount' => 154.20,
+                    'amount_tendered' => 200,
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.currency', 'USD')
+            ->assertJsonPath('data.grand_total', '10.0000')
+            ->assertJsonPath('data.payments.0.currency', 'MVR')
+            ->assertJsonPath('data.payments.0.currency_amount', '154.2000')
+            ->assertJsonPath('data.payments.0.amount', '10.0000')
+            ->assertJsonPath('data.payments.0.change_due', '45.8000')
+            ->json('data');
+
+        $this->assertDatabaseHas('sale_payments', [
+            'sale_id' => $sale['id'],
+            'currency' => 'MVR',
+            'exchange_rate' => '15.42000000',
+            'currency_amount' => '154.2000',
+            'amount' => '10.0000',
+            'amount_tendered' => '200.0000',
+            'change_due' => '45.8000',
+        ]);
+
+        $this->actingAs($cashier)
+            ->postJson("/pos/api/shifts/{$openResponse['id']}/close", [
+                'closing_cash_by_currency' => ['USD' => 100, 'MVR' => 1150],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.expected_cash_by_currency.USD', '100.0000')
+            ->assertJsonPath('data.expected_cash_by_currency.MVR', '1154.2000')
+            ->assertJsonPath('data.cash_variance_by_currency.USD', '0.0000')
+            ->assertJsonPath('data.cash_variance_by_currency.MVR', '-4.2000');
     }
 
     #[Test]

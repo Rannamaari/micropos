@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>EOD Report {{ $cashierShift->shift_number }}</title>
+    <title>EOD Report {{ $document['document']['number'] }}</title>
     <style>
         @page { size: A4; margin: 14mm; }
         * { box-sizing: border-box; }
@@ -30,28 +30,34 @@
     </style>
 </head>
 <body>
-@php($report = $cashierShift->report_snapshot ?? [])
-@php($currency = $cashierShift->currency)
+@php($report = $document['shift']['report'] ?? [])
+@php($currency = $document['document']['currency'])
+@php($openingCash = $document['shift']['opening_cash_by_currency'] ?? [$currency => $document['shift']['opening_cash']])
+@php($expectedCash = $document['shift']['expected_cash_by_currency'] ?? [$currency => $document['shift']['expected_cash']])
+@php($closingCash = $document['shift']['closing_cash_by_currency'] ?? [$currency => $document['shift']['closing_cash']])
+@php($cashVariance = $document['shift']['cash_variance_by_currency'] ?? [$currency => $document['shift']['cash_variance']])
 <div class="print-controls"><button type="button" onclick="window.print()">Print A4</button></div>
 <main class="report">
     <header class="head">
         <div>
             <h1 class="title">END OF DAY REPORT</h1>
-            <strong>{{ $cashierShift->company?->name }}</strong><br>
-            <span class="muted">{{ $cashierShift->branch?->name }} / {{ $cashierShift->warehouse?->name }}</span>
+            <strong>{{ $document['company']['name'] ?? '—' }}</strong><br>
+            <span class="muted">{{ $document['branch']['name'] ?? '—' }} / {{ $document['warehouse']['name'] ?? '—' }}</span>
         </div>
         <div class="right">
-            <strong>{{ $cashierShift->shift_number }}</strong><br>
-            <span class="muted">Cashier: {{ $cashierShift->cashier?->name }}</span><br>
-            <span class="muted">Opened: {{ $cashierShift->opened_at?->format('d M Y, h:i A') }}</span><br>
-            <span class="muted">Closed: {{ $cashierShift->closed_at?->format('d M Y, h:i A') }}</span>
+            <strong>{{ $document['document']['number'] }}</strong><br>
+            <span class="muted">Cashier: {{ $document['cashier']['name'] ?? '—' }}</span><br>
+            <span class="muted">Opened: {{ \Illuminate\Support\Carbon::parse($document['shift']['opened_at'])->format('d M Y, h:i A') }}</span><br>
+            <span class="muted">Closed: {{ \Illuminate\Support\Carbon::parse($document['shift']['closed_at'])->format('d M Y, h:i A') }}</span>
         </div>
     </header>
 
     <section class="grid">
-        <div class="card"><div class="label">Opening Cash</div><div class="amount">{{ $currency }} {{ number_format((float) $cashierShift->opening_cash, 2) }}</div></div>
-        <div class="card"><div class="label">Expected Cash</div><div class="amount">{{ $currency }} {{ number_format((float) $cashierShift->expected_cash, 2) }}</div></div>
-        <div class="card"><div class="label">Cash Counted</div><div class="amount">{{ $currency }} {{ number_format((float) $cashierShift->closing_cash, 2) }}</div></div>
+        @foreach ($openingCash as $cashCurrency => $amount)
+            <div class="card"><div class="label">Opening Cash · {{ $cashCurrency }}</div><div class="amount">{{ $cashCurrency }} {{ number_format((float) $amount, 2) }}</div></div>
+            <div class="card"><div class="label">Expected Cash · {{ $cashCurrency }}</div><div class="amount">{{ $cashCurrency }} {{ number_format((float) ($expectedCash[$cashCurrency] ?? 0), 2) }}</div></div>
+            <div class="card"><div class="label">Cash Counted · {{ $cashCurrency }}</div><div class="amount">{{ $cashCurrency }} {{ number_format((float) ($closingCash[$cashCurrency] ?? 0), 2) }}</div></div>
+        @endforeach
     </section>
 
     <table>
@@ -69,19 +75,21 @@
         <thead><tr><th>Payment Method</th><th class="num">Applied</th><th class="num">Tendered</th><th class="num">Change</th></tr></thead>
         <tbody>
             @forelse ($report['payments'] ?? [] as $payment)
-                <tr><td>{{ ucfirst(str_replace('_', ' ', $payment['method'])) }}</td><td class="num">{{ $currency }} {{ number_format((float) $payment['amount'], 2) }}</td><td class="num">{{ $currency }} {{ number_format((float) $payment['tendered'], 2) }}</td><td class="num">{{ $currency }} {{ number_format((float) $payment['change_due'], 2) }}</td></tr>
+                <tr><td>{{ ucfirst(str_replace('_', ' ', $payment['method'])) }} · {{ $payment['currency'] ?? $currency }}</td><td class="num">{{ $payment['currency'] ?? $currency }} {{ number_format((float) ($payment['currency_amount'] ?? $payment['amount']), 2) }}<br><small>{{ $currency }} {{ number_format((float) $payment['amount'], 2) }} applied</small></td><td class="num">{{ $payment['currency'] ?? $currency }} {{ number_format((float) $payment['tendered'], 2) }}</td><td class="num">{{ $payment['currency'] ?? $currency }} {{ number_format((float) $payment['change_due'], 2) }}</td></tr>
             @empty
                 <tr><td colspan="4" class="muted">No payments were recorded in this shift.</td></tr>
             @endforelse
-            <tr class="total"><td>Cash variance</td><td colspan="3" class="num">{{ $currency }} {{ number_format((float) $cashierShift->cash_variance, 2) }}</td></tr>
+            @foreach ($cashVariance as $cashCurrency => $amount)
+                <tr class="total"><td>Cash variance · {{ $cashCurrency }}</td><td colspan="3" class="num">{{ $cashCurrency }} {{ number_format((float) $amount, 2) }}</td></tr>
+            @endforeach
         </tbody>
     </table>
 
     @if (($report['returns_count'] ?? 0) > 0)
         <div class="note"><strong>Returns recorded:</strong> {{ $report['returns_count'] }} totaling {{ $currency }} {{ number_format((float) $report['returns_total'], 2) }}.<br>{{ $report['refund_note'] }}</div>
     @endif
-    @if ($cashierShift->opening_notes || $cashierShift->closing_notes)
-        <div class="note"><strong>Shift notes</strong><br>@if ($cashierShift->opening_notes) Opening: {{ $cashierShift->opening_notes }}<br>@endif @if ($cashierShift->closing_notes) Closing: {{ $cashierShift->closing_notes }}@endif</div>
+    @if ($document['shift']['opening_notes'] || $document['shift']['closing_notes'])
+        <div class="note"><strong>Shift notes</strong><br>@if ($document['shift']['opening_notes']) Opening: {{ $document['shift']['opening_notes'] }}<br>@endif @if ($document['shift']['closing_notes']) Closing: {{ $document['shift']['closing_notes'] }}@endif</div>
     @endif
     <footer class="footer">Generated from MicroNET POS cashier shift records. Powered by <strong>micronet.mv</strong></footer>
 </main>

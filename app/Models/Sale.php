@@ -113,6 +113,13 @@ class Sale extends Model
         return $this->hasMany(ReceiptPrintEvent::class);
     }
 
+    public function documentSnapshot(): HasOne
+    {
+        return $this->hasOne(FinancialDocumentSnapshot::class, 'document_id')
+            ->where('document_type', self::class)
+            ->where('version', 1);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

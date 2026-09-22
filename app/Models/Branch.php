@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use InvalidArgumentException;
 
 class Branch extends Model
 {
@@ -26,6 +27,8 @@ class Branch extends Model
         'address',
         'city',
         'currency',
+        'secondary_currency',
+        'secondary_currency_rate',
         'receipt_shop_name',
         'receipt_tax_number',
         'receipt_gst_label',
@@ -45,7 +48,32 @@ class Branch extends Model
             'is_active' => 'boolean',
             'receipt_show_address' => 'boolean',
             'receipt_show_phone' => 'boolean',
+            'secondary_currency_rate' => 'decimal:8',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (Branch $branch): void {
+            $branch->currency = strtoupper($branch->currency ?: 'MVR');
+            $branch->secondary_currency = $branch->secondary_currency ? strtoupper($branch->secondary_currency) : null;
+
+            if ($branch->secondary_currency === $branch->currency) {
+                throw new InvalidArgumentException('Secondary currency must be different from the primary currency.');
+            }
+
+            if ($branch->secondary_currency && (! is_numeric($branch->secondary_currency_rate) || (float) $branch->secondary_currency_rate <= 0)) {
+                throw new InvalidArgumentException('A positive exchange rate is required for the secondary currency.');
+            }
+
+            if (! $branch->secondary_currency) {
+                $branch->secondary_currency_rate = null;
+            }
+
+            if ($branch->exists && $branch->isDirty(['currency', 'secondary_currency']) && CashierShift::query()->where('branch_id', $branch->id)->where('status', 'open')->exists()) {
+                throw new InvalidArgumentException('Close all cashier shifts before changing branch currencies. The exchange rate may still be updated.');
+            }
+        });
     }
 
     public function company(): BelongsTo

@@ -20,6 +20,13 @@ class BranchesTable
                 TextColumn::make('code')->searchable()->sortable(),
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('city')->toggleable(),
+                TextColumn::make('currency')->label('Primary')->badge(),
+                TextColumn::make('secondary_currency')->label('Accepted')->badge()->placeholder('—'),
+                TextColumn::make('secondary_currency_rate')
+                    ->label('Rate')
+                    ->formatStateUsing(fn ($state, $record): string => $state
+                        ? "1 {$record->currency} = ".number_format((float) $state, 4)." {$record->secondary_currency}"
+                        : '—'),
                 TextColumn::make('warehouses_count')->counts('warehouses')->label('Warehouses'),
                 IconColumn::make('is_active')->boolean(),
             ])

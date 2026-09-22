@@ -117,8 +117,8 @@ class BusinessReports extends Page
             ->where('sales.branch_id', $branch->id)
             ->whereIn('sales.status', $this->saleStatuses())
             ->whereBetween('sales.sale_date', [$this->dateFrom, $this->dateTo])
-            ->selectRaw('sale_payments.payment_method, COALESCE(SUM(sale_payments.amount), 0) as total')
-            ->groupBy('sale_payments.payment_method')
+            ->selectRaw('sale_payments.payment_method, sale_payments.currency, COALESCE(SUM(sale_payments.amount), 0) as total, COALESCE(SUM(COALESCE(sale_payments.currency_amount, sale_payments.amount)), 0) as currency_total')
+            ->groupBy('sale_payments.payment_method', 'sale_payments.currency')
             ->orderByDesc('total')
             ->get();
 

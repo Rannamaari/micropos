@@ -23,6 +23,13 @@ class BranchInfolist
                                 TextEntry::make('phone'),
                                 TextEntry::make('email'),
                                 TextEntry::make('city'),
+                                TextEntry::make('currency')->label('Primary Currency')->badge(),
+                                TextEntry::make('secondary_currency')->label('Secondary Currency')->badge()->placeholder('Not configured'),
+                                TextEntry::make('secondary_currency_rate')
+                                    ->label('Exchange Rate')
+                                    ->formatStateUsing(fn ($state, $record): string => $state
+                                        ? "1 {$record->currency} = ".number_format((float) $state, 4)." {$record->secondary_currency}"
+                                        : 'Not configured'),
                                 IconEntry::make('is_active')->boolean(),
                                 TextEntry::make('address')->columnSpanFull(),
                             ]),

@@ -28,10 +28,9 @@ class SalesTable
                 TextColumn::make('payment_methods')
                     ->label('Payment Method')
                     ->state(fn ($record): string => $record->payments
-                        ->pluck('payment_method')
-                        ->filter()
+                        ->filter(fn ($payment): bool => filled($payment->payment_method))
+                        ->map(fn ($payment): string => ucwords(str_replace('_', ' ', $payment->payment_method))." ({$payment->currency})")
                         ->unique()
-                        ->map(fn (string $method): string => ucwords(str_replace('_', ' ', $method)))
                         ->implode(', ') ?: '—'),
                 TextColumn::make('balance_due')->formatStateUsing(fn ($state, $record): string => "{$record->currency} ".number_format((float) $state, 2))->sortable(),
                 TextColumn::make('creator.name')->label('Cashier')->toggleable(),

@@ -30,6 +30,8 @@ export function addOrIncrementItem(items, product) {
             price: decimal(product.price),
             taxRate: decimal(product.tax_rate),
             discountAmount: 0,
+            discount: product.discount ?? { eligible: false },
+            appliedDiscountTier: null,
             quantity: normalizeQuantity(1, product.unit.precision),
             unit: product.unit,
             trackInventory: product.track_inventory,

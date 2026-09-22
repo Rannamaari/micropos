@@ -9,6 +9,7 @@ use App\Exceptions\TransactionException;
 use App\Models\Branch;
 use App\Models\CashierShift;
 use App\Models\Customer;
+use App\Models\CustomerTransaction;
 use App\Models\Product;
 use App\Models\ProductBranchPrice;
 use App\Models\Sale;
@@ -29,6 +30,7 @@ class SalesService
         private readonly NumberSequenceService $numberSequenceService,
         private readonly CustomerLedgerService $customerLedgerService,
         private readonly ReceiptProfileResolver $receiptProfileResolver,
+        private readonly FinancialDocumentSnapshotService $financialDocumentSnapshotService,
     ) {}
 
     public function createSale(
@@ -442,6 +444,12 @@ class SalesService
                 'status' => $fullyReturned ? SaleStatus::Refunded : SaleStatus::PartiallyRefunded,
             ])->save();
 
+            $this->financialDocumentSnapshotService->captureSaleReturn($saleReturn, $attributes['created_by'] ?? null);
+            $this->financialDocumentSnapshotService->audit($sale, $fullyReturned ? 'refunded' : 'partially_refunded', $attributes['created_by'] ?? null, [
+                'return_document_id' => $saleReturn->id,
+                'return_number' => $saleReturn->sale_return_number,
+            ]);
+
             return $saleReturn->load('items');
         });
     }
@@ -468,15 +476,18 @@ class SalesService
 
         foreach ($payments as $payment) {
             $amount = $this->normalizePositiveDecimal($payment['amount'] ?? null, 'Sale payment amount');
+            $paymentCurrency = strtoupper((string) ($payment['currency'] ?? $sale->currency));
+            $exchangeRate = $this->normalizePositiveDecimal($payment['exchange_rate'] ?? 1, 'Payment exchange rate');
+            $currencyAmount = $this->normalizePositiveDecimal($payment['currency_amount'] ?? $amount, 'Payment currency amount');
             $amountTendered = isset($payment['amount_tendered']) ? $this->normalizeNonNegativeDecimal($payment['amount_tendered'], 'Amount tendered') : null;
             $changeDue = 0.0;
 
             if ($amountTendered !== null) {
-                if ($amountTendered + 0.0001 < $amount) {
+                if ($amountTendered + 0.0001 < $currencyAmount) {
                     throw new TransactionException('Amount tendered cannot be less than the applied payment amount.');
                 }
 
-                $changeDue = round($amountTendered - $amount, 4);
+                $changeDue = round($amountTendered - $currencyAmount, 4);
             }
 
             $paymentTotal += $amount;
@@ -485,7 +496,9 @@ class SalesService
                 'company_id' => $sale->company_id,
                 'sale_id' => $sale->id,
                 'payment_method' => $payment['payment_method'] ?? 'cash',
-                'currency' => $sale->currency,
+                'currency' => $paymentCurrency,
+                'exchange_rate' => number_format($exchangeRate, 8, '.', ''),
+                'currency_amount' => $this->formatDecimal($currencyAmount),
                 'amount' => $this->formatDecimal($amount),
                 'amount_tendered' => $amountTendered !== null ? $this->formatDecimal($amountTendered) : null,
                 'change_due' => $this->formatDecimal($changeDue),
@@ -564,11 +577,13 @@ class SalesService
                 Branch::query()->where('company_id', $sale->company_id)->findOrFail($sale->branch_id),
             ),
         ])->save();
+
+        $this->financialDocumentSnapshotService->captureSale($sale, $attributes['created_by'] ?? null);
     }
 
     private function saleReceivableBalance(string $saleId): string
     {
-        $balance = \App\Models\CustomerTransaction::query()
+        $balance = CustomerTransaction::query()
             ->where('reference_type', Sale::class)
             ->where('reference_id', $saleId)
             ->sum('amount');
@@ -594,6 +609,11 @@ class SalesService
             $discountAmount = $this->normalizeNonNegativeDecimal($item['discount_amount'] ?? 0, 'Discount amount');
             $taxRate = $this->normalizeNonNegativeDecimal($item['tax_rate'] ?? $product->tax_rate ?? 0, 'Tax rate');
             $lineSubtotal = round($quantity * $unitPrice, 4);
+
+            if ($discountAmount > $lineSubtotal + 0.0001) {
+                throw new TransactionException('Discount cannot exceed the item subtotal.');
+            }
+
             $taxBase = round($lineSubtotal - $discountAmount, 4);
             $taxAmount = round($taxBase * ($taxRate / 100), 4);
             $lineTotal = round($taxBase + $taxAmount, 4);

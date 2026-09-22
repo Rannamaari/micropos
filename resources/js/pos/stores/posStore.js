@@ -62,9 +62,22 @@ export const usePosStore = defineStore('pos', () => {
     const searchInputValue = ref('');
 
     const currency = computed(() => bootstrap.value.company?.currency ?? 'MVR');
+    const secondaryCurrency = computed(() => bootstrap.value.company?.secondary_currency ?? null);
+    const secondaryCurrencyRate = computed(() => Number(bootstrap.value.company?.secondary_currency_rate ?? 0));
+
+    function formatSecondaryMoney(amount) {
+        const rate = secondaryCurrencyRate.value;
+
+        if (! secondaryCurrency.value || ! Number.isFinite(rate) || rate <= 0) {
+            return null;
+        }
+
+        return formatMoney(Number(amount ?? 0) * rate, secondaryCurrency.value);
+    }
     const permissions = computed(() => new Set(bootstrap.value.user?.permissions ?? []));
     const canOverridePrice = computed(() => permissions.value.has('sales.price_override'));
     const canDiscount = computed(() => permissions.value.has('sales.discount'));
+    const customerDiscountTier = computed(() => customer.value?.discount_tier ?? 'normal');
     const canCreateCustomer = computed(() => permissions.value.has('customers.create'));
     const canUseCredit = computed(() => permissions.value.has('sales.credit'));
     const canViewSalesHistory = computed(() => permissions.value.has('sales.view'));
@@ -149,6 +162,7 @@ export const usePosStore = defineStore('pos', () => {
         const line = items.value.find((item) => item.productId === productId);
         if (! line) return;
         line.quantity = normalizeQuantity(line.quantity + 1, line.unit.precision);
+        refreshTierDiscount(line);
     }
 
     function decrementItem(productId) {
@@ -160,6 +174,7 @@ export const usePosStore = defineStore('pos', () => {
             return;
         }
         line.quantity = next;
+        refreshTierDiscount(line);
     }
 
     function updateItemQuantity(productId, value) {
@@ -168,6 +183,7 @@ export const usePosStore = defineStore('pos', () => {
         const quantity = normalizeQuantity(value, line.unit.precision);
         if (! Number.isFinite(quantity) || quantity <= 0) return;
         line.quantity = quantity;
+        refreshTierDiscount(line);
     }
 
     function updateItemPrice(productId, value) {
@@ -175,6 +191,7 @@ export const usePosStore = defineStore('pos', () => {
         const line = items.value.find((item) => item.productId === productId);
         if (! line) return;
         line.price = decimal(value);
+        line.appliedDiscountTier = null;
     }
 
     function updateItemDiscount(productId, value) {
@@ -182,6 +199,41 @@ export const usePosStore = defineStore('pos', () => {
         const line = items.value.find((item) => item.productId === productId);
         if (! line) return;
         line.discountAmount = decimal(value);
+        line.appliedDiscountTier = null;
+    }
+
+    function refreshTierDiscount(line) {
+        if (! line.appliedDiscountTier) return;
+
+        const tierPrice = line.discount?.[`${line.appliedDiscountTier}_price`];
+        const regularPrice = decimal(line.price);
+
+        if (! line.discount?.eligible || tierPrice === null || tierPrice === undefined || decimal(tierPrice) >= regularPrice) {
+            line.discountAmount = 0;
+            line.appliedDiscountTier = null;
+            return;
+        }
+
+        line.discountAmount = decimal((regularPrice - decimal(tierPrice)) * line.quantity);
+    }
+
+    function applyCustomerDiscount(productId) {
+        const line = items.value.find((item) => item.productId === productId);
+        if (! line || ! line.discount?.eligible) return;
+
+        const tier = customerDiscountTier.value;
+        const tierPrice = line.discount[`${tier}_price`];
+
+        if (tierPrice === null || tierPrice === undefined || decimal(tierPrice) >= decimal(line.price)) {
+            line.discountAmount = 0;
+            line.appliedDiscountTier = null;
+            notify(`No ${tier.toUpperCase()} discount price is set; regular price kept.`);
+            return;
+        }
+
+        line.appliedDiscountTier = tier;
+        refreshTierDiscount(line);
+        notify(`${tier.toUpperCase()} discount applied.`, 'success');
     }
 
     function removeItem(productId) {
@@ -190,6 +242,12 @@ export const usePosStore = defineStore('pos', () => {
 
     function setCustomer(selectedCustomer) {
         customer.value = selectedCustomer;
+        items.value.forEach((line) => {
+            if (line.appliedDiscountTier) {
+                line.discountAmount = 0;
+                line.appliedDiscountTier = null;
+            }
+        });
         customerModalOpen.value = false;
     }
 
@@ -216,6 +274,7 @@ export const usePosStore = defineStore('pos', () => {
             quantity: item.quantity,
             unit_price: decimal(item.price),
             discount_amount: decimal(item.discountAmount),
+            discount_tier: item.appliedDiscountTier,
         }));
     }
 
@@ -415,6 +474,9 @@ export const usePosStore = defineStore('pos', () => {
                 payments: payments.value.map((payment) => ({
                     payment_method: payment.payment_method,
                     amount: decimal(payment.amount),
+                    currency: payment.currency,
+                    currency_amount: decimal(payment.currency_amount),
+                    exchange_rate: payment.exchange_rate,
                     amount_tendered: payment.amount_tendered ? decimal(payment.amount_tendered) : null,
                     reference: payment.reference || null,
                     notes: payment.notes || null,
@@ -547,8 +609,18 @@ export const usePosStore = defineStore('pos', () => {
         await loadSalesHistory(page);
     }
 
-    function printActiveSale(sale = activeSaleLookup.value ?? saleCompleteModal.value, format = 'thermal') {
+    async function printActiveSale(sale = activeSaleLookup.value ?? saleCompleteModal.value, format = 'thermal') {
         if (!sale) return;
+
+        let printEvent;
+
+        try {
+            const response = await window.axios.post(`/pos/api/sales/${sale.id}/print-events`, { format });
+            printEvent = response.data.data;
+        } catch (error) {
+            notify(error.response?.data?.message ?? 'Unable to record this print. The receipt was not printed.', 'error');
+            return;
+        }
 
         const isA4Invoice = format === 'a4';
         const escape = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({
@@ -566,6 +638,9 @@ export const usePosStore = defineStore('pos', () => {
         const showPhone = receiptProfile.show_phone ?? receiptProfile.receipt_show_phone ?? true;
         const header = headerText ? `<div class="muted message">${escape(headerText).replace(/\n/g, '<br>')}</div>` : '';
         const footer = footerText ? `${escape(footerText).replace(/\n/g, '<br>')}<br>` : 'Thank you for shopping with us.<br>';
+        const reprint = Number(printEvent?.print_number ?? 1) > 1
+            ? `<div style="color:#b42318;font-size:16px;font-weight:800;letter-spacing:.12em;margin:12px 0;text-align:center">REPRINT #${printEvent.print_number}</div>`
+            : '';
         const itemRows = (sale.items ?? []).map((item) => `
             <tr><td>${escape(item.name)}<br><small>${escape(item.sku ?? '')}</small></td><td class="num">${Number(item.quantity).toFixed(2)}</td><td class="num">${money(item.line_total)}</td></tr>
             <tr class="tax"><td colspan="2">GST ${Number(item.tax_rate ?? 0).toFixed(2)}%</td><td class="num">${money(item.tax_amount)}</td></tr>
@@ -574,16 +649,22 @@ export const usePosStore = defineStore('pos', () => {
             const method = escape(String(payment.payment_method ?? 'payment').replace('_', ' '));
             const isCash = payment.payment_method === 'cash';
             const hasTenderedAmount = payment.amount_tendered !== null && payment.amount_tendered !== undefined;
+            const paymentCurrency = payment.currency ?? sale.currency ?? currency.value;
+            const nativeMoney = (value) => `${escape(paymentCurrency)} ${Number(value ?? 0).toFixed(2)}`;
+            const nativeAmount = payment.currency_amount ?? payment.amount;
+            const conversion = paymentCurrency !== (sale.currency ?? currency.value)
+                ? `<div><span>Applied at ${Number(payment.exchange_rate ?? 1).toFixed(4)}</span><span>${money(payment.amount)}</span></div>`
+                : '';
 
             if (isCash || hasTenderedAmount) {
-                const tenderedAmount = hasTenderedAmount ? payment.amount_tendered : payment.amount;
+                const tenderedAmount = hasTenderedAmount ? payment.amount_tendered : nativeAmount;
 
-                return `<div><span>${method} received</span><span>${money(tenderedAmount)}</span></div>
-                    <div><span>${method} applied</span><span>${money(payment.amount)}</span></div>
-                    <div><strong>Change given</strong><strong>${money(payment.change_due ?? 0)}</strong></div>`;
+                return `<div><span>${method} received</span><span>${nativeMoney(tenderedAmount)}</span></div>
+                    <div><span>${method} applied</span><span>${nativeMoney(nativeAmount)}</span></div>
+                    ${conversion}<div><strong>Change given</strong><strong>${nativeMoney(payment.change_due ?? 0)}</strong></div>`;
             }
 
-            return `<div><span>${method} paid</span><span>${money(payment.amount)}</span></div>`;
+            return `<div><span>${method} paid</span><span>${nativeMoney(nativeAmount)}</span></div>${conversion}`;
         }).join('');
         const saleDate = escape(new Date(sale.completed_at ?? sale.created_at).toLocaleString());
         const customer = sale.customer?.name ? `<div>Customer: ${escape(sale.customer.name)}</div>` : '';
@@ -595,11 +676,11 @@ export const usePosStore = defineStore('pos', () => {
         }
 
         const thermalReceipt = `<header class="center"><div class="shop">${escape(shopName)}</div><div class="muted">${escape(gstLabel)}: ${escape(taxNumber)}</div>${showAddress && address ? `<div class="muted">${escape(address)}</div>` : ''}${showPhone && receiptProfile.phone ? `<div class="muted">${escape(receiptProfile.phone)}</div>` : ''}${header}</header>
-            <div class="rule"></div><div>Receipt: ${escape(sale.sale_number)}</div><div>Date: ${saleDate}</div>${customer}<div class="rule"></div>
+            ${reprint}<div class="rule"></div><div>Receipt: ${escape(sale.sale_number)}</div><div>Date: ${saleDate}</div>${customer}<div class="rule"></div>
             <table><thead><tr><td><strong>Item</strong></td><td class="num"><strong>Qty</strong></td><td class="num"><strong>Amount</strong></td></tr></thead><tbody>${itemRows}</tbody></table>
             <div class="rule"></div><div class="totals"><div><span>Subtotal</span><span>${money(sale.subtotal)}</span></div><div><span>GST</span><span>${money(sale.tax_total)}</span></div>${Number(sale.discount_total ?? 0) > 0 ? `<div><span>Discount</span><span>-${money(sale.discount_total)}</span></div>` : ''}<div class="grand"><span>Total</span><span>${money(sale.grand_total)}</span></div></div>
             <div class="rule"></div><div class="payments">${payments}</div><div class="footer">${footer}Powered by <strong>micronet.mv</strong></div>`;
-        const a4Invoice = `<main class="invoice"><header class="invoice-head"><div><div class="shop">${escape(shopName)}</div><div>${escape(gstLabel)}: ${escape(taxNumber)}</div>${showAddress && address ? `<div>${escape(address)}</div>` : ''}${showPhone && receiptProfile.phone ? `<div>${escape(receiptProfile.phone)}</div>` : ''}${header}</div><div class="invoice-title"><h1>TAX INVOICE</h1><strong>${escape(sale.sale_number)}</strong><div>${saleDate}</div></div></header><section class="invoice-meta">${customer || '<div>Customer: Walk-in Customer</div>'}</section><table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead><tbody>${itemRows}</tbody></table><section class="invoice-bottom"><div class="payments"><h2>Payments</h2>${payments}</div><div class="totals"><div><span>Subtotal</span><span>${money(sale.subtotal)}</span></div><div><span>GST</span><span>${money(sale.tax_total)}</span></div>${Number(sale.discount_total ?? 0) > 0 ? `<div><span>Discount</span><span>-${money(sale.discount_total)}</span></div>` : ''}<div class="grand"><span>Total</span><span>${money(sale.grand_total)}</span></div></div></section><footer class="footer">${footer}Powered by <strong>micronet.mv</strong></footer></main>`;
+        const a4Invoice = `<main class="invoice"><header class="invoice-head"><div><div class="shop">${escape(shopName)}</div><div>${escape(gstLabel)}: ${escape(taxNumber)}</div>${showAddress && address ? `<div>${escape(address)}</div>` : ''}${showPhone && receiptProfile.phone ? `<div>${escape(receiptProfile.phone)}</div>` : ''}${header}</div><div class="invoice-title"><h1>TAX INVOICE</h1><strong>${escape(sale.sale_number)}</strong><div>${saleDate}</div></div></header>${reprint}<section class="invoice-meta">${customer || '<div>Customer: Walk-in Customer</div>'}</section><table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead><tbody>${itemRows}</tbody></table><section class="invoice-bottom"><div class="payments"><h2>Payments</h2>${payments}</div><div class="totals"><div><span>Subtotal</span><span>${money(sale.subtotal)}</span></div><div><span>GST</span><span>${money(sale.tax_total)}</span></div>${Number(sale.discount_total ?? 0) > 0 ? `<div><span>Discount</span><span>-${money(sale.discount_total)}</span></div>` : ''}<div class="grand"><span>Total</span><span>${money(sale.grand_total)}</span></div></div></section><footer class="footer">${footer}Powered by <strong>micronet.mv</strong></footer></main>`;
         const styles = isA4Invoice
             ? `@page{size:A4;margin:14mm}*{box-sizing:border-box}body{margin:0;font:12px/1.45 Arial,sans-serif;color:#14212b}.invoice{max-width:182mm;margin:auto}.invoice-head{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #14212b;padding-bottom:14px}.shop{font-size:22px;font-weight:700}.invoice-title{text-align:right}.invoice-title h1{margin:0 0 8px;font-size:24px;letter-spacing:.08em}.invoice-meta{padding:16px 0}table{width:100%;border-collapse:collapse}th{background:#edf2f5;text-align:left}th,td{border:1px solid #b9c5cc;padding:8px;vertical-align:top}.num{text-align:right;white-space:nowrap}.tax td{padding-top:3px;font-size:11px;color:#52616b}.invoice-bottom{display:grid;grid-template-columns:1fr 260px;gap:30px;margin-top:22px}.totals div,.payments div{display:flex;justify-content:space-between;gap:20px;padding:4px 0}.totals{border-top:2px solid #14212b;padding-top:6px}.grand{font-size:16px;font-weight:700;border-top:1px solid #14212b;margin-top:5px;padding-top:7px!important}.payments h2{margin:0 0 7px;font-size:13px}.footer{margin-top:38px;border-top:1px solid #b9c5cc;padding-top:12px;text-align:center;color:#52616b}.message{margin-top:6px}.print-controls{position:fixed;top:12px;right:12px;z-index:10}.print-controls button{border:0;border-radius:8px;background:#14212b;color:#fff;cursor:pointer;font:600 14px Arial,sans-serif;padding:10px 14px}@media print{body{width:auto}.print-controls{display:none}}`
             : `@page { size: 80mm auto; margin: 3mm; } *{box-sizing:border-box} body{width:74mm;margin:0;font:12px/1.35 Arial,sans-serif;color:#000}.center{text-align:center}.shop{font-size:18px;font-weight:700}.muted,small{font-size:10px;color:#333}.rule{border-top:1px dashed #000;margin:9px 0}table{width:100%;border-collapse:collapse}td{padding:3px 0;vertical-align:top}.num{text-align:right;white-space:nowrap}.tax td{padding-top:0;font-size:10px}.totals div,.payments div{display:flex;justify-content:space-between;padding:2px 0}.grand{font-size:15px;font-weight:700;margin-top:3px}.footer{margin-top:14px;font-size:10px;text-align:center}.print-controls{position:fixed;top:12px;right:12px;z-index:10}.print-controls button{border:0;border-radius:8px;background:#14212b;color:#fff;cursor:pointer;font:600 14px Arial,sans-serif;padding:10px 14px}@media print{body{width:74mm}.print-controls{display:none}}`;
@@ -613,6 +694,9 @@ export const usePosStore = defineStore('pos', () => {
             id: uuid(),
             payment_method: payment.payment_method,
             amount: decimal(payment.amount),
+            currency: payment.currency ?? currency.value,
+            currency_amount: decimal(payment.currency_amount ?? payment.amount),
+            exchange_rate: decimal(payment.exchange_rate ?? 1, 8),
             amount_tendered: payment.amount_tendered ? decimal(payment.amount_tendered) : null,
             reference: payment.reference ?? '',
             notes: payment.notes ?? '',
@@ -670,9 +754,12 @@ export const usePosStore = defineStore('pos', () => {
         activeSaleLookup,
         searchInputValue,
         currency,
+        secondaryCurrency,
+        secondaryCurrencyRate,
         permissions,
         canOverridePrice,
         canDiscount,
+        customerDiscountTier,
         canCreateCustomer,
         canUseCredit,
         canViewSalesHistory,
@@ -692,6 +779,8 @@ export const usePosStore = defineStore('pos', () => {
         setActiveShift,
         t,
         formatMoney: (amount) => formatMoney(amount, currency.value),
+        formatCurrency: (amount, paymentCurrency) => formatMoney(amount, paymentCurrency),
+        formatSecondaryMoney,
         formatDateTime,
         formatStatus,
         notify,
@@ -704,6 +793,7 @@ export const usePosStore = defineStore('pos', () => {
         updateItemQuantity,
         updateItemPrice,
         updateItemDiscount,
+        applyCustomerDiscount,
         removeItem,
         setCustomer,
         resetSale,

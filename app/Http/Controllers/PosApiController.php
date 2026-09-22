@@ -14,10 +14,10 @@ use App\Models\SaleReturnItem;
 use App\Models\User;
 use App\Services\CashierShiftService;
 use App\Services\CustomerLedgerService;
+use App\Services\FinancialDocumentSnapshotService;
 use App\Services\InventoryQueryService;
 use App\Services\NumberSequenceService;
 use App\Services\ProductSearchService;
-use App\Services\ReceiptProfileResolver;
 use App\Services\SalesService;
 use App\Support\PosUserContextResolver;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -48,7 +48,7 @@ class PosApiController extends Controller
         private readonly CustomerLedgerService $customerLedgerService,
         private readonly NumberSequenceService $numberSequenceService,
         private readonly PosUserContextResolver $posUserContextResolver,
-        private readonly ReceiptProfileResolver $receiptProfileResolver,
+        private readonly FinancialDocumentSnapshotService $financialDocumentSnapshotService,
         private readonly CashierShiftService $cashierShiftService,
     ) {}
 
@@ -294,6 +294,25 @@ class PosApiController extends Controller
         ]);
     }
 
+    public function recordSalePrint(Request $request, Sale $sale): JsonResponse
+    {
+        $context = $this->posContext($request, 'sales.view');
+        $this->ensureSaleInContext($sale, $context['company_id']);
+        abort_unless(in_array($sale->status, [SaleStatus::Completed, SaleStatus::PartiallyRefunded, SaleStatus::Refunded], true), 422);
+
+        $validated = Validator::make($request->all(), [
+            'format' => ['required', 'in:thermal,a4'],
+        ])->validate();
+        $this->financialDocumentSnapshotService->captureSale($sale, $sale->created_by, ! $sale->documentSnapshot()->exists());
+        $event = $this->financialDocumentSnapshotService->recordSalePrint($sale, $request->user(), $validated['format']);
+
+        return response()->json(['data' => [
+            'print_number' => $event->reprint_number,
+            'format' => $event->format,
+            'printed_at' => $event->printed_at?->toIso8601String(),
+        ]]);
+    }
+
     public function completeHeldSale(Request $request, Sale $sale): JsonResponse
     {
         $context = $this->posContext($request, 'sales.complete');
@@ -335,16 +354,22 @@ class PosApiController extends Controller
     {
         $context = $this->posContext($request, 'sales.create');
         $validated = Validator::make($request->all(), [
-            'opening_cash' => ['required', 'numeric', 'gte:0'],
+            'opening_cash' => ['nullable', 'numeric', 'gte:0', 'required_without:opening_cash_by_currency'],
+            'opening_cash_by_currency' => ['nullable', 'array', 'required_without:opening_cash'],
+            'opening_cash_by_currency.*' => ['required', 'numeric', 'gte:0'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ])->validate();
 
-        $shift = $this->cashierShiftService->open(
-            $context,
-            $request->user(),
-            (float) $validated['opening_cash'],
-            $validated['notes'] ?? null,
-        );
+        try {
+            $shift = $this->cashierShiftService->open(
+                $context,
+                $request->user(),
+                $validated['opening_cash_by_currency'] ?? [$context['branch']->currency => (float) $validated['opening_cash']],
+                $validated['notes'] ?? null,
+            );
+        } catch (TransactionException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
 
         return response()->json(['message' => 'Cashier shift opened.', 'data' => $this->transformShift($shift)]);
     }
@@ -353,7 +378,9 @@ class PosApiController extends Controller
     {
         $context = $this->posContext($request, 'sales.create');
         $validated = Validator::make($request->all(), [
-            'closing_cash' => ['required', 'numeric', 'gte:0'],
+            'closing_cash' => ['nullable', 'numeric', 'gte:0', 'required_without:closing_cash_by_currency'],
+            'closing_cash_by_currency' => ['nullable', 'array', 'required_without:closing_cash'],
+            'closing_cash_by_currency.*' => ['required', 'numeric', 'gte:0'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ])->validate();
 
@@ -362,7 +389,7 @@ class PosApiController extends Controller
                 $cashierShift,
                 $context,
                 $request->user(),
-                (float) $validated['closing_cash'],
+                $validated['closing_cash_by_currency'] ?? [$context['branch']->currency => (float) $validated['closing_cash']],
                 $validated['notes'] ?? null,
             );
         } catch (TransactionException $exception) {
@@ -479,9 +506,13 @@ class PosApiController extends Controller
             'items.*.quantity' => ['required', 'numeric', 'gt:0'],
             'items.*.unit_price' => ['nullable', 'numeric', 'gte:0'],
             'items.*.discount_amount' => ['nullable', 'numeric', 'gte:0'],
+            'items.*.discount_tier' => ['nullable', 'string', 'in:normal,vip,vvip'],
             'payments' => [$allowNoPayments ? 'nullable' : 'present', 'array'],
             'payments.*.payment_method' => ['required_with:payments', 'string', 'max:255'],
-            'payments.*.amount' => ['required_with:payments', 'numeric', 'gt:0'],
+            'payments.*.amount' => ['nullable', 'numeric', 'gt:0', 'required_without:payments.*.currency_amount'],
+            'payments.*.currency' => ['nullable', 'string', 'size:3'],
+            'payments.*.currency_amount' => ['nullable', 'numeric', 'gt:0', 'required_without:payments.*.amount'],
+            'payments.*.exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'payments.*.amount_tendered' => ['nullable', 'numeric', 'gte:0'],
             'payments.*.reference' => ['nullable', 'string', 'max:255'],
             'payments.*.notes' => ['nullable', 'string'],
@@ -489,7 +520,23 @@ class PosApiController extends Controller
 
         $validated = Validator::make($request->all(), $rules)->validate();
 
-        $items = collect($validated['items'])->map(function (array $item) use ($context): array {
+        $customer = null;
+
+        if (! empty($validated['customer_id'])) {
+            $customer = Customer::query()
+                ->where('company_id', $context['company_id'])
+                ->find($validated['customer_id']);
+
+            if (! $customer) {
+                throw ValidationException::withMessages([
+                    'customer_id' => ['The selected customer does not belong to this company.'],
+                ]);
+            }
+        }
+
+        $customerTier = $customer?->discount_tier ?? 'normal';
+
+        $items = collect($validated['items'])->map(function (array $item) use ($context, $customerTier): array {
             $product = Product::query()
                 ->with('unit')
                 ->where('company_id', $context['company_id'])
@@ -510,15 +557,56 @@ class PosApiController extends Controller
                 ]);
             }
 
+            $branchPrice = $product->branchPrices()
+                ->where('branch_id', $context['branch_id'])
+                ->value('selling_price');
+            $regularPrice = round((float) ($branchPrice ?? $product->selling_price), 4);
+            $discountTier = $item['discount_tier'] ?? null;
+            $discountAmount = array_key_exists('discount_amount', $item) ? round((float) $item['discount_amount'], 4) : null;
+
+            if ($discountTier !== null) {
+                if (! $product->discount_eligible) {
+                    throw ValidationException::withMessages([
+                        'discount' => ["{$product->name} is not eligible for a tier discount."],
+                    ]);
+                }
+
+                if ($discountTier !== $customerTier) {
+                    throw ValidationException::withMessages([
+                        'discount' => ['The selected discount tier does not match the customer.'],
+                    ]);
+                }
+
+                if (array_key_exists('unit_price', $item) && $item['unit_price'] !== null && round((float) $item['unit_price'], 4) !== $regularPrice) {
+                    throw ValidationException::withMessages([
+                        'price_override' => ['A tier discount cannot be combined with a price override.'],
+                    ]);
+                }
+
+                $tierPrice = $product->{"{$discountTier}_discount_price"};
+
+                if ($tierPrice === null || (float) $tierPrice >= $regularPrice) {
+                    $discountTier = null;
+                    $discountAmount = 0.0;
+                } else {
+                    $discountAmount = round(($regularPrice - (float) $tierPrice) * $quantity, 4);
+                }
+            }
+
             return [
                 'product_id' => $product->id,
                 'quantity' => $quantity,
-                'unit_price' => array_key_exists('unit_price', $item) ? round((float) $item['unit_price'], 4) : null,
-                'discount_amount' => array_key_exists('discount_amount', $item) ? round((float) $item['discount_amount'], 4) : null,
+                'unit_price' => $discountTier !== null ? $regularPrice : (array_key_exists('unit_price', $item) ? round((float) $item['unit_price'], 4) : null),
+                'discount_amount' => $discountAmount,
+                'discount_tier' => $discountTier,
             ];
         })->all();
 
         $this->assertFrontendPermissions($request, $items);
+
+        $validated['payments'] = collect($validated['payments'] ?? [])
+            ->map(fn (array $payment): array => $this->normalizePaymentCurrency($context, $payment))
+            ->all();
 
         if (! $allowNoPayments) {
             $this->assertCreditPermission($request, $this->estimateGrandTotal($context['company_id'], $items), $validated['payments'] ?? []);
@@ -609,7 +697,7 @@ class PosApiController extends Controller
                 }
             }
 
-            if (($item['discount_amount'] ?? null) !== null && (float) $item['discount_amount'] > 0 && ! $request->user()->can('sales.discount')) {
+            if (($item['discount_amount'] ?? null) !== null && (float) $item['discount_amount'] > 0 && empty($item['discount_tier']) && ! $request->user()->can('sales.discount')) {
                 throw ValidationException::withMessages([
                     'discount' => ['Discount requires permission.'],
                 ]);
@@ -664,6 +752,42 @@ class PosApiController extends Controller
         }
     }
 
+    private function normalizePaymentCurrency(array $context, array $payment): array
+    {
+        $branch = $context['branch'];
+        $primaryCurrency = strtoupper($branch->currency);
+        $secondaryCurrency = $branch->secondary_currency ? strtoupper($branch->secondary_currency) : null;
+        $paymentCurrency = strtoupper($payment['currency'] ?? $primaryCurrency);
+
+        if (! in_array($paymentCurrency, array_filter([$primaryCurrency, $secondaryCurrency]), true)) {
+            throw ValidationException::withMessages([
+                'payments' => ["{$paymentCurrency} is not accepted by this branch."],
+            ]);
+        }
+
+        $rate = $paymentCurrency === $primaryCurrency ? 1.0 : (float) $branch->secondary_currency_rate;
+
+        if ($rate <= 0) {
+            throw ValidationException::withMessages([
+                'payments' => ['The branch exchange rate must be configured before accepting secondary-currency payments.'],
+            ]);
+        }
+
+        if (isset($payment['exchange_rate']) && abs((float) $payment['exchange_rate'] - $rate) > 0.00000001) {
+            throw ValidationException::withMessages([
+                'payments' => ['The exchange rate changed while this payment was open. Reopen payment and use the latest rate.'],
+            ]);
+        }
+
+        $currencyAmount = round((float) ($payment['currency_amount'] ?? $payment['amount']), 4);
+        $payment['currency'] = $paymentCurrency;
+        $payment['exchange_rate'] = round($rate, 8);
+        $payment['currency_amount'] = $currencyAmount;
+        $payment['amount'] = round($currencyAmount / $rate, 4);
+
+        return $payment;
+    }
+
     /**
      * @param  Collection<int, Product>  $products
      * @return array<int, array<string, mixed>>
@@ -698,6 +822,10 @@ class PosApiController extends Controller
             'expected_cash' => $shift->expected_cash,
             'closing_cash' => $shift->closing_cash,
             'cash_variance' => $shift->cash_variance,
+            'opening_cash_by_currency' => $shift->opening_cash_by_currency,
+            'expected_cash_by_currency' => $shift->expected_cash_by_currency,
+            'closing_cash_by_currency' => $shift->closing_cash_by_currency,
+            'cash_variance_by_currency' => $shift->cash_variance_by_currency,
             'opened_at' => $shift->opened_at?->toIso8601String(),
             'closed_at' => $shift->closed_at?->toIso8601String(),
         ];
@@ -729,6 +857,12 @@ class PosApiController extends Controller
             'price' => (string) ($price?->selling_price ?? $product->selling_price),
             'cost_price' => (string) ($price?->cost_price ?? $product->cost_price),
             'tax_rate' => (string) $product->tax_rate,
+            'discount' => [
+                'eligible' => $product->discount_eligible,
+                'normal_price' => $product->normal_discount_price === null ? null : (string) $product->normal_discount_price,
+                'vip_price' => $product->vip_discount_price === null ? null : (string) $product->vip_discount_price,
+                'vvip_price' => $product->vvip_discount_price === null ? null : (string) $product->vvip_discount_price,
+            ],
             'stock' => $product->track_inventory ? $balance : null,
             'stock_label' => $product->track_inventory ? $balance : 'Non-stock',
             'track_inventory' => $product->track_inventory,
@@ -751,6 +885,7 @@ class PosApiController extends Controller
             'balance' => $this->customerLedgerService->currentBalance($customer->id, $currency),
             'credit_limit' => $customer->credit_limit,
             'is_walk_in' => $customer->is_walk_in,
+            'discount_tier' => $customer->discount_tier,
         ];
     }
 
@@ -791,12 +926,19 @@ class PosApiController extends Controller
     private function transformSale(Sale $sale): array
     {
         $sale->loadMissing(['items.product.primaryBarcode', 'items.product.unit', 'payments', 'customer', 'returns.items', 'company', 'branch', 'warehouse', 'creator', 'canceller']);
-        $receipt = $sale->receipt_snapshot ?: $this->receiptProfileResolver->resolve($sale->company, $sale->branch);
         $returnedQuantities = SaleReturnItem::query()
             ->selectRaw('sale_item_id, COALESCE(SUM(quantity), 0) as returned_quantity')
             ->whereIn('sale_item_id', $sale->items->pluck('id'))
             ->groupBy('sale_item_id')
             ->pluck('returned_quantity', 'sale_item_id');
+
+        if (in_array($sale->status, [SaleStatus::Completed, SaleStatus::PartiallyRefunded, SaleStatus::Refunded], true)) {
+            $snapshot = $this->financialDocumentSnapshotService->captureSale($sale, $sale->created_by, ! $sale->documentSnapshot()->exists());
+
+            return $this->transformFinalizedSale($sale, $snapshot->snapshot, $returnedQuantities);
+        }
+
+        $receipt = $sale->receipt_snapshot ?: [];
 
         return [
             'id' => $sale->id,
@@ -880,12 +1022,72 @@ class PosApiController extends Controller
             'payments' => $sale->payments->map(fn ($payment): array => [
                 'id' => $payment->id,
                 'payment_method' => $payment->payment_method,
+                'currency' => $payment->currency,
+                'exchange_rate' => (string) ($payment->exchange_rate ?? 1),
+                'currency_amount' => (string) ($payment->currency_amount ?? $payment->amount),
                 'amount' => (string) $payment->amount,
                 'amount_tendered' => $payment->amount_tendered !== null ? (string) $payment->amount_tendered : null,
                 'change_due' => (string) $payment->change_due,
                 'reference' => $payment->reference,
                 'paid_at' => $payment->paid_at?->toIso8601String(),
             ])->all(),
+        ];
+    }
+
+    /** @param  Collection<string, mixed>  $returnedQuantities */
+    private function transformFinalizedSale(Sale $sale, array $document, Collection $returnedQuantities): array
+    {
+        $itemsByProduct = $sale->items->keyBy('product_id');
+
+        return [
+            'id' => $sale->id,
+            'sale_number' => $document['document']['number'],
+            'status' => $sale->status->value,
+            'sale_date' => $document['document']['date'],
+            'completed_at' => $document['document']['time'],
+            'created_at' => $document['document']['time'],
+            'currency' => $document['document']['currency'],
+            'company' => $document['company'],
+            'receipt' => $document['company']['receipt'] ?? [],
+            'branch' => $document['branch'],
+            'warehouse' => $document['warehouse'],
+            'cashier' => $document['cashier'],
+            'customer' => $document['customer'],
+            'subtotal' => $document['totals']['subtotal'],
+            'discount_total' => $document['totals']['discount_total'],
+            'tax_total' => $document['totals']['tax_total'],
+            'grand_total' => $document['totals']['grand_total'],
+            'paid_total' => $document['totals']['paid_total'],
+            'balance_due' => $document['totals']['balance_due'],
+            'cancellation_reason' => $sale->cancellation_reason,
+            'cancellation_notes' => $sale->cancellation_notes,
+            'cancelled_at' => $sale->cancelled_at?->toIso8601String(),
+            'cancelled_by' => $sale->canceller ? ['id' => $sale->canceller->id, 'name' => $sale->canceller->name] : null,
+            'payment_method_summary' => collect($document['payments'])->pluck('payment_method')->filter()->unique()->implode(', '),
+            'items' => collect($document['lines'])->map(function (array $item) use ($itemsByProduct, $returnedQuantities): array {
+                $transactionItem = $itemsByProduct->get($item['product_id']);
+                $returned = $transactionItem ? (float) ($returnedQuantities[$transactionItem->id] ?? 0) : 0;
+
+                return [
+                    'id' => $transactionItem?->id,
+                    'product_id' => $item['product_id'],
+                    'name' => $item['name'],
+                    'sku' => $item['sku'],
+                    'barcode' => $item['barcode'],
+                    'quantity' => $item['quantity'],
+                    'returned_quantity' => number_format($returned, 4, '.', ''),
+                    'returnable_quantity' => number_format(max(0, (float) $item['quantity'] - $returned), 4, '.', ''),
+                    'unit_price' => $item['unit_price'],
+                    'unit_cost' => $item['unit_cost'],
+                    'discount_amount' => $item['discount_amount'],
+                    'tax_rate' => $item['tax_rate'],
+                    'tax_amount' => $item['tax_amount'],
+                    'line_total' => $item['line_total'],
+                    'track_inventory' => $transactionItem?->product?->track_inventory ?? true,
+                    'unit' => $item['unit'],
+                ];
+            })->all(),
+            'payments' => $document['payments'],
         ];
     }
 

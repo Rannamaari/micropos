@@ -14,6 +14,7 @@ class ReceiptPrintEvent extends Model
         'company_id',
         'sale_id',
         'printed_by',
+        'printed_by_name',
         'reprint_number',
         'format',
         'printed_at',

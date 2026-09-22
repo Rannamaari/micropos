@@ -41,6 +41,8 @@ class PosPageController extends Controller
                     'id' => $user->company?->id,
                     'name' => $user->company?->name,
                     'currency' => $context['branch']->currency,
+                    'secondary_currency' => $context['branch']->secondary_currency,
+                    'secondary_currency_rate' => $context['branch']->secondary_currency_rate,
                 ],
                 'branch' => [
                     'id' => $context['branch']->id,
@@ -57,6 +59,7 @@ class PosPageController extends Controller
                     'shift_number' => $shift->shift_number,
                     'currency' => $shift->currency,
                     'opening_cash' => $shift->opening_cash,
+                    'opening_cash_by_currency' => $shift->opening_cash_by_currency,
                     'opened_at' => $shift->opened_at?->toIso8601String(),
                 ] : null,
                 'walk_in_customer' => $walkInCustomer ? [
@@ -67,6 +70,7 @@ class PosPageController extends Controller
                     'balance' => number_format((float) $walkInCustomer->transactions()->sum('amount'), 4, '.', ''),
                     'credit_limit' => $walkInCustomer->credit_limit,
                     'is_walk_in' => true,
+                    'discount_tier' => $walkInCustomer->discount_tier,
                 ] : null,
             ],
         ]);

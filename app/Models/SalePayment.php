@@ -21,6 +21,8 @@ class SalePayment extends Model
         'sale_id',
         'payment_method',
         'currency',
+        'exchange_rate',
+        'currency_amount',
         'amount',
         'amount_tendered',
         'change_due',
@@ -37,6 +39,8 @@ class SalePayment extends Model
     {
         return [
             'amount' => 'decimal:4',
+            'exchange_rate' => 'decimal:8',
+            'currency_amount' => 'decimal:4',
             'amount_tendered' => 'decimal:4',
             'change_due' => 'decimal:4',
             'paid_at' => 'datetime',

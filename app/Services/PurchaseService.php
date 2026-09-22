@@ -26,6 +26,7 @@ class PurchaseService
         private readonly InventoryService $inventoryService,
         private readonly NumberSequenceService $numberSequenceService,
         private readonly SupplierLedgerService $supplierLedgerService,
+        private readonly FinancialDocumentSnapshotService $financialDocumentSnapshotService,
     ) {}
 
     public function createPurchase(
@@ -290,6 +291,8 @@ class PurchaseService
                 'received_at' => $occurredAt,
             ])->save();
 
+            $this->financialDocumentSnapshotService->capturePurchase($purchase, $receivedBy);
+
             return $purchase->fresh('items');
         });
     }
@@ -338,13 +341,15 @@ class PurchaseService
                 'occurred_at' => $attributes['paid_at'] ?? now(),
             ]);
 
+            $this->financialDocumentSnapshotService->capturePurchasePayment($payment, $attributes['created_by'] ?? null);
+
             return $payment;
         });
     }
 
     public function cancelPurchase(string $purchaseId, ?string $cancelledBy = null, ?string $notes = null): Purchase
     {
-        return DB::transaction(function () use ($purchaseId, $cancelledBy, $notes): Purchase {
+        return DB::transaction(function () use ($purchaseId, $notes): Purchase {
             $purchase = Purchase::query()
                 ->lockForUpdate()
                 ->with(['items', 'payments'])
@@ -494,6 +499,12 @@ class PurchaseService
             $purchase->forceFill([
                 'balance_due' => $this->formatDecimal(max(0, (float) $purchase->grand_total - $returnTotal - (float) $purchase->paid_total)),
             ])->save();
+
+            $this->financialDocumentSnapshotService->capturePurchaseReturn($purchaseReturn, $attributes['created_by'] ?? null);
+            $this->financialDocumentSnapshotService->audit($purchase, 'corrected_by_purchase_return', $attributes['created_by'] ?? null, [
+                'return_document_id' => $purchaseReturn->id,
+                'return_number' => $purchaseReturn->purchase_return_number,
+            ]);
 
             return $purchaseReturn->load('items');
         });

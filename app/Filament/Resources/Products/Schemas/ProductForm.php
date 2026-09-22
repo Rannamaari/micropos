@@ -92,6 +92,17 @@ class ProductForm
                                 TextInput::make('tax_rate')->numeric()->minValue(0)->default(0),
                                 TextInput::make('minimum_stock')->numeric()->minValue(0)->default(0),
                             ]),
+                        Toggle::make('discount_eligible')
+                            ->label('Eligible for customer discounts')
+                            ->live()
+                            ->inline(false),
+                        Grid::make(3)
+                            ->visible(fn (Get $get): bool => (bool) $get('discount_eligible'))
+                            ->schema([
+                                TextInput::make('normal_discount_price')->label('Normal Discount Price')->numeric()->minValue(0)->helperText('Leave blank to use the regular selling price.'),
+                                TextInput::make('vip_discount_price')->label('VIP Discount Price')->numeric()->minValue(0)->helperText('Leave blank to use the regular selling price.'),
+                                TextInput::make('vvip_discount_price')->label('VVIP Discount Price')->numeric()->minValue(0)->helperText('Leave blank to use the regular selling price.'),
+                            ]),
                     ]),
                 Section::make('Store Prices')
                     ->description('Set the selling and cost price for each store. POS always uses the price for its assigned store.')

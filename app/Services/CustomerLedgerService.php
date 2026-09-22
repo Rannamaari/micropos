@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class CustomerLedgerService
 {
+    public function __construct(private readonly FinancialDocumentSnapshotService $financialDocumentSnapshotService) {}
+
     public function currentBalance(string $customerId, ?string $currency = null): string
     {
         $query = CustomerTransaction::query()
@@ -125,6 +127,8 @@ class CustomerLedgerService
                     'balance_due' => $this->formatDecimal(max(0, (float) $sale->balance_due - $numericAmount)),
                 ])->save();
             }
+
+            $this->financialDocumentSnapshotService->captureCustomerPayment($payment, $attributes['created_by'] ?? null);
 
             return $payment;
         });

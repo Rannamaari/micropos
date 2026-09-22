@@ -13,7 +13,10 @@ use Illuminate\Support\Facades\DB;
 
 class CashierShiftService
 {
-    public function __construct(private readonly NumberSequenceService $numberSequenceService) {}
+    public function __construct(
+        private readonly NumberSequenceService $numberSequenceService,
+        private readonly FinancialDocumentSnapshotService $financialDocumentSnapshotService,
+    ) {}
 
     public function activeFor(array $context, string $cashierId): ?CashierShift
     {
@@ -27,9 +30,9 @@ class CashierShiftService
             ->first();
     }
 
-    public function open(array $context, User $cashier, float $openingCash, ?string $notes = null): CashierShift
+    public function open(array $context, User $cashier, array $openingCashByCurrency, ?string $notes = null): CashierShift
     {
-        return DB::transaction(function () use ($context, $cashier, $openingCash, $notes): CashierShift {
+        return DB::transaction(function () use ($context, $cashier, $openingCashByCurrency, $notes): CashierShift {
             $existing = CashierShift::query()
                 ->where('company_id', $context['company_id'])
                 ->where('branch_id', $context['branch_id'])
@@ -43,6 +46,9 @@ class CashierShiftService
                 return $existing;
             }
 
+            $cashByCurrency = $this->normalizeCashCounts($context, $openingCashByCurrency);
+            $primaryCurrency = strtoupper($context['branch']->currency);
+
             return CashierShift::query()->create([
                 'company_id' => $context['company_id'],
                 'branch_id' => $context['branch_id'],
@@ -51,16 +57,17 @@ class CashierShiftService
                 'shift_number' => $this->numberSequenceService->next($context['company_id'], 'cashier_shift'),
                 'currency' => $context['branch']->currency,
                 'status' => 'open',
-                'opening_cash' => $this->decimal($openingCash),
+                'opening_cash' => $cashByCurrency[$primaryCurrency],
+                'opening_cash_by_currency' => $cashByCurrency,
                 'opening_notes' => $notes,
                 'opened_at' => now(),
             ]);
         });
     }
 
-    public function close(CashierShift $shift, array $context, User $cashier, float $closingCash, ?string $notes = null): CashierShift
+    public function close(CashierShift $shift, array $context, User $cashier, array $closingCashByCurrency, ?string $notes = null): CashierShift
     {
-        return DB::transaction(function () use ($shift, $context, $cashier, $closingCash, $notes): CashierShift {
+        return DB::transaction(function () use ($shift, $context, $cashier, $closingCashByCurrency, $notes): CashierShift {
             $shift = CashierShift::query()->lockForUpdate()->findOrFail($shift->id);
 
             if ($shift->status !== 'open') {
@@ -82,19 +89,24 @@ class CashierShiftService
                 ->join('sales', 'sales.id', '=', 'sale_payments.sale_id')
                 ->where('sales.cashier_shift_id', $shift->id)
                 ->whereIn('sales.status', $saleStatuses)
-                ->selectRaw('sale_payments.payment_method, COALESCE(SUM(sale_payments.amount), 0) as amount, COALESCE(SUM(sale_payments.amount_tendered), 0) as tendered, COALESCE(SUM(sale_payments.change_due), 0) as change_due')
-                ->groupBy('sale_payments.payment_method')
+                ->selectRaw('sale_payments.payment_method, sale_payments.currency, COALESCE(SUM(sale_payments.amount), 0) as amount, COALESCE(SUM(COALESCE(sale_payments.currency_amount, sale_payments.amount)), 0) as currency_amount, COALESCE(SUM(sale_payments.amount_tendered), 0) as tendered, COALESCE(SUM(sale_payments.change_due), 0) as change_due')
+                ->groupBy('sale_payments.payment_method', 'sale_payments.currency')
                 ->orderBy('sale_payments.payment_method')
+                ->orderBy('sale_payments.currency')
                 ->get()
                 ->map(fn ($payment): array => [
                     'method' => $payment->payment_method,
+                    'currency' => $payment->currency,
                     'amount' => $this->decimal((float) $payment->amount),
+                    'currency_amount' => $this->decimal((float) $payment->currency_amount),
                     'tendered' => $this->decimal((float) $payment->tendered),
                     'change_due' => $this->decimal((float) $payment->change_due),
                 ])->all();
 
-            $cashPayments = collect($payments)->firstWhere('method', 'cash');
-            $cashReceived = (float) ($cashPayments['amount'] ?? 0);
+            $cashReceivedByCurrency = collect($payments)
+                ->where('method', 'cash')
+                ->mapWithKeys(fn (array $payment): array => [$payment['currency'] => $payment['currency_amount']])
+                ->all();
             $returns = SaleReturn::query()
                 ->where('company_id', $shift->company_id)
                 ->where('warehouse_id', $shift->warehouse_id)
@@ -102,8 +114,22 @@ class CashierShiftService
                 ->whereBetween('created_at', [$shift->opened_at, now()])
                 ->selectRaw('COUNT(*) as returns_count, COALESCE(SUM(grand_total), 0) as returns_total')
                 ->first();
-            $expectedCash = (float) $shift->opening_cash + $cashReceived;
-            $variance = $closingCash - $expectedCash;
+            $openingCashByCurrency = $shift->opening_cash_by_currency ?? [$shift->currency => $shift->opening_cash];
+            $closingCashByCurrency = $this->normalizeCashCounts($context, $closingCashByCurrency);
+            $expectedCashByCurrency = [];
+            $cashVarianceByCurrency = [];
+
+            foreach ($closingCashByCurrency as $currency => $closingCash) {
+                $expectedCashByCurrency[$currency] = $this->decimal(
+                    (float) ($openingCashByCurrency[$currency] ?? 0) + (float) ($cashReceivedByCurrency[$currency] ?? 0),
+                );
+                $cashVarianceByCurrency[$currency] = $this->decimal((float) $closingCash - (float) $expectedCashByCurrency[$currency]);
+            }
+
+            $primaryCurrency = strtoupper($context['branch']->currency);
+            $expectedCash = $expectedCashByCurrency[$primaryCurrency];
+            $closingCash = $closingCashByCurrency[$primaryCurrency];
+            $variance = $cashVarianceByCurrency[$primaryCurrency];
             $closedAt = now();
 
             $snapshot = [
@@ -116,7 +142,8 @@ class CashierShiftService
                 'paid_total' => $this->decimal((float) ($sales->paid_total ?? 0)),
                 'balance_due' => $this->decimal((float) ($sales->balance_due ?? 0)),
                 'payments' => $payments,
-                'cash_received' => $this->decimal($cashReceived),
+                'cash_received' => $this->decimal((float) ($cashReceivedByCurrency[$primaryCurrency] ?? 0)),
+                'cash_received_by_currency' => $cashReceivedByCurrency,
                 'returns_count' => (int) ($returns->returns_count ?? 0),
                 'returns_total' => $this->decimal((float) ($returns->returns_total ?? 0)),
                 'refund_note' => 'Refund payment methods are not recorded yet, so refunds are shown separately and are not deducted from expected cash.',
@@ -125,12 +152,17 @@ class CashierShiftService
             $shift->forceFill([
                 'status' => 'closed',
                 'expected_cash' => $this->decimal($expectedCash),
+                'expected_cash_by_currency' => $expectedCashByCurrency,
                 'closing_cash' => $this->decimal($closingCash),
+                'closing_cash_by_currency' => $closingCashByCurrency,
                 'cash_variance' => $this->decimal($variance),
+                'cash_variance_by_currency' => $cashVarianceByCurrency,
                 'closing_notes' => $notes,
                 'report_snapshot' => $snapshot,
                 'closed_at' => $closedAt,
             ])->save();
+
+            $this->financialDocumentSnapshotService->captureCashierShift($shift, $cashier->id);
 
             return $shift->fresh(['company', 'branch', 'warehouse', 'cashier']);
         });
@@ -139,5 +171,37 @@ class CashierShiftService
     private function decimal(float $value): string
     {
         return number_format($value, 4, '.', '');
+    }
+
+    /** @return array<string, string> */
+    private function normalizeCashCounts(array $context, array $cashByCurrency): array
+    {
+        $primaryCurrency = strtoupper($context['branch']->currency);
+        $secondaryCurrency = $context['branch']->secondary_currency
+            ? strtoupper($context['branch']->secondary_currency)
+            : null;
+        $currencies = array_values(array_filter([$primaryCurrency, $secondaryCurrency]));
+        $cashByCurrency = collect($cashByCurrency)
+            ->mapWithKeys(fn ($amount, $currency): array => [strtoupper((string) $currency) => $amount])
+            ->all();
+        $unexpected = array_diff(array_keys($cashByCurrency), $currencies);
+
+        if ($unexpected !== []) {
+            throw new TransactionException('Cash was entered for a currency that is not configured for this branch.');
+        }
+
+        $normalized = [];
+
+        foreach ($currencies as $currency) {
+            $value = $cashByCurrency[$currency] ?? 0;
+
+            if (! is_numeric($value) || (float) $value < 0) {
+                throw new TransactionException("{$currency} cash must be zero or greater.");
+            }
+
+            $normalized[$currency] = $this->decimal((float) $value);
+        }
+
+        return $normalized;
     }
 }

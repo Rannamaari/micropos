@@ -23,9 +23,9 @@ class SaleInfolist
                                 TextEntry::make('customer.name'),
                                 TextEntry::make('branch.name'),
                                 TextEntry::make('warehouse.name'),
-                                TextEntry::make('grand_total')->money('MVR'),
-                                TextEntry::make('paid_total')->money('MVR'),
-                                TextEntry::make('balance_due')->money('MVR'),
+                                TextEntry::make('grand_total')->money(fn ($record): string => $record->currency),
+                                TextEntry::make('paid_total')->money(fn ($record): string => $record->currency),
+                                TextEntry::make('balance_due')->money(fn ($record): string => $record->currency),
                                 TextEntry::make('creator.name'),
                                 TextEntry::make('receipt_print_events_count')->label('Admin Reprints'),
                                 TextEntry::make('completed_at')->dateTime(),
@@ -42,6 +42,15 @@ class SaleInfolist
                             ->listWithLineBreaks(),
                         TextEntry::make('payments.payment_method')
                             ->label('Payments')
+                            ->listWithLineBreaks(),
+                        TextEntry::make('payments.currency')
+                            ->label('Payment Currencies')
+                            ->listWithLineBreaks(),
+                        TextEntry::make('payments.currency_amount')
+                            ->label('Native Payment Amounts')
+                            ->listWithLineBreaks(),
+                        TextEntry::make('payments.amount')
+                            ->label('Applied in Sale Currency')
                             ->listWithLineBreaks(),
                     ]),
             ]);

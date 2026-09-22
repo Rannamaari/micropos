@@ -53,4 +53,9 @@ class SaleReturnItem extends Model
     {
         return $this->belongsTo(SaleItem::class);
     }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
 }

@@ -23,6 +23,9 @@ const store = usePosStore();
         <div class="mt-4 rounded-[26px] bg-[var(--pos-accent)]/12 p-4">
             <p class="text-xs uppercase tracking-[0.24em] text-[var(--pos-accent-strong)]">Total</p>
             <p class="mt-2 font-[var(--font-display)] text-4xl font-black text-white md:text-5xl">{{ store.formatMoney(store.totals.grandTotal) }}</p>
+            <p v-if="store.formatSecondaryMoney(store.totals.grandTotal)" class="mt-2 text-base font-semibold tabular-nums text-[var(--pos-accent-strong)]">
+                ≈ {{ store.formatSecondaryMoney(store.totals.grandTotal) }}
+            </p>
         </div>
 
         <div class="mt-4 grid gap-3 sm:grid-cols-3">

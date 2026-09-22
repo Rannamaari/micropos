@@ -8,17 +8,29 @@ const store = usePosStore();
 const cashInput = ref(null);
 const submitting = ref(false);
 const error = ref('');
-const form = ref({ cash: props.mode === 'open' ? '' : '', notes: '' });
 const isOpening = computed(() => props.mode === 'open');
 const title = computed(() => isOpening.value ? 'Open Cashier Shift' : 'Close Shift and Generate EOD');
-const label = computed(() => isOpening.value ? 'Opening cash in drawer' : 'Cash counted in drawer');
+const currencies = computed(() => [store.currency, ...(store.secondaryCurrency ? [store.secondaryCurrency] : [])]);
+const form = ref({
+    cash: Object.fromEntries(currencies.value.map((currency) => [currency, ''])),
+    notes: '',
+});
+
+function setCashInput(element, index) {
+    if (index === 0) cashInput.value = element;
+}
 
 async function submit() {
     error.value = '';
-    const cash = Number(form.value.cash);
-    if (!Number.isFinite(cash) || cash < 0) {
-        error.value = 'Enter a valid cash amount of zero or more.';
-        return;
+    const cashByCurrency = {};
+
+    for (const currency of currencies.value) {
+        const cash = Number(form.value.cash[currency] || 0);
+        if (!Number.isFinite(cash) || cash < 0) {
+            error.value = `Enter a valid ${currency} cash amount of zero or more.`;
+            return;
+        }
+        cashByCurrency[currency] = cash;
     }
 
     submitting.value = true;
@@ -27,8 +39,8 @@ async function submit() {
             ? '/pos/api/shifts/open'
             : `/pos/api/shifts/${store.bootstrap.active_shift.id}/close`;
         const payload = isOpening.value
-            ? { opening_cash: cash, notes: form.value.notes || null }
-            : { closing_cash: cash, notes: form.value.notes || null };
+            ? { opening_cash_by_currency: cashByCurrency, notes: form.value.notes || null }
+            : { closing_cash_by_currency: cashByCurrency, notes: form.value.notes || null };
         const response = await window.axios.post(url, payload);
         emit('saved', response.data);
     } catch (requestError) {
@@ -53,10 +65,19 @@ onMounted(() => nextTick(() => cashInput.value?.focus()));
                 <button type="button" class="pos-button-secondary min-h-11" :disabled="submitting" @click="emit('close')">Close</button>
             </div>
 
-            <label class="mt-6 block text-sm font-medium text-[var(--pos-paper)]">
-                {{ label }}
-                <input ref="cashInput" v-model="form.cash" class="pos-input mt-2 text-xl font-bold tabular-nums" inputmode="decimal" placeholder="0.00" aria-label="Cash amount">
-            </label>
+            <div class="mt-6 grid gap-3 sm:grid-cols-2">
+                <label v-for="(currency, index) in currencies" :key="currency" class="block text-sm font-medium text-[var(--pos-paper)]">
+                    {{ isOpening ? 'Opening' : 'Counted' }} cash · {{ currency }}
+                    <input
+                        :ref="(element) => setCashInput(element, index)"
+                        v-model="form.cash[currency]"
+                        class="pos-input mt-2 text-xl font-bold tabular-nums"
+                        inputmode="decimal"
+                        placeholder="0.00"
+                        :aria-label="`${currency} cash amount`"
+                    >
+                </label>
+            </div>
             <label class="mt-4 block text-sm font-medium text-[var(--pos-paper)]">
                 Notes (optional)
                 <textarea v-model="form.notes" class="pos-input mt-2 min-h-24" :placeholder="isOpening ? 'Float or handover note' : 'Explain any cash difference'" />

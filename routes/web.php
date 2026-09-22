@@ -68,6 +68,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/sales/search', [PosApiController::class, 'searchSales'])->name('pos.sales.search');
         Route::get('/sales/{sale}/resume', [PosApiController::class, 'resumeHeldSale'])->name('pos.sales.resume');
         Route::get('/sales/{sale}', [PosApiController::class, 'showSale'])->name('pos.sales.show');
+        Route::post('/sales/{sale}/print-events', [PosApiController::class, 'recordSalePrint'])->name('pos.sales.print-events.store');
         Route::post('/sales', [PosApiController::class, 'completeSale'])->name('pos.sales.store');
         Route::post('/sales/hold', [PosApiController::class, 'holdSale'])->name('pos.sales.hold');
         Route::post('/sales/{sale}/hold', [PosApiController::class, 'reholdSale'])->name('pos.sales.rehold');

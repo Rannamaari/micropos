@@ -24,6 +24,18 @@ class CashierShiftInfolist
                     TextEntry::make('expected_cash')->money(fn ($record): string => $record->currency),
                     TextEntry::make('closing_cash')->money(fn ($record): string => $record->currency),
                     TextEntry::make('cash_variance')->money(fn ($record): string => $record->currency),
+                    TextEntry::make('opening_cash_by_currency')
+                        ->label('Opening Cash by Currency')
+                        ->formatStateUsing(fn (?array $state): string => collect($state ?? [])->map(fn ($amount, $currency): string => "{$currency} ".number_format((float) $amount, 2))->implode(' · ')),
+                    TextEntry::make('expected_cash_by_currency')
+                        ->label('Expected Cash by Currency')
+                        ->formatStateUsing(fn (?array $state): string => collect($state ?? [])->map(fn ($amount, $currency): string => "{$currency} ".number_format((float) $amount, 2))->implode(' · ')),
+                    TextEntry::make('closing_cash_by_currency')
+                        ->label('Counted Cash by Currency')
+                        ->formatStateUsing(fn (?array $state): string => collect($state ?? [])->map(fn ($amount, $currency): string => "{$currency} ".number_format((float) $amount, 2))->implode(' · ')),
+                    TextEntry::make('cash_variance_by_currency')
+                        ->label('Variance by Currency')
+                        ->formatStateUsing(fn (?array $state): string => collect($state ?? [])->map(fn ($amount, $currency): string => "{$currency} ".number_format((float) $amount, 2))->implode(' · ')),
                     TextEntry::make('closed_at')->dateTime(),
                     TextEntry::make('closing_notes')->columnSpanFull(),
                 ]),

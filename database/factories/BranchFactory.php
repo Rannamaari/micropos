@@ -28,6 +28,8 @@ class BranchFactory extends Factory
             'address' => fake()->optional()->address(),
             'city' => fake()->optional()->city(),
             'currency' => 'MVR',
+            'secondary_currency' => null,
+            'secondary_currency_rate' => null,
             'is_active' => true,
         ];
     }

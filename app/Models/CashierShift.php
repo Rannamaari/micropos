@@ -15,6 +15,7 @@ class CashierShift extends Model
     protected $fillable = [
         'company_id', 'branch_id', 'warehouse_id', 'cashier_id', 'shift_number', 'currency', 'status',
         'opening_cash', 'expected_cash', 'closing_cash', 'cash_variance', 'opening_notes', 'closing_notes',
+        'opening_cash_by_currency', 'expected_cash_by_currency', 'closing_cash_by_currency', 'cash_variance_by_currency',
         'report_snapshot', 'opened_at', 'closed_at',
     ];
 
@@ -25,6 +26,10 @@ class CashierShift extends Model
             'expected_cash' => 'decimal:4',
             'closing_cash' => 'decimal:4',
             'cash_variance' => 'decimal:4',
+            'opening_cash_by_currency' => 'array',
+            'expected_cash_by_currency' => 'array',
+            'closing_cash_by_currency' => 'array',
+            'cash_variance_by_currency' => 'array',
             'report_snapshot' => 'array',
             'opened_at' => 'datetime',
             'closed_at' => 'datetime',
