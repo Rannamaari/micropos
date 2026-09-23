@@ -121,6 +121,10 @@ class BusinessReports extends Page
             ->groupBy('sale_payments.payment_method', 'sale_payments.currency')
             ->orderByDesc('total')
             ->get();
+        $paymentCurrencies = $this->paymentCurrencies($branch);
+        $paymentCollections = $paymentCurrencies->mapWithKeys(fn (string $currency): array => [
+            $currency => (float) $payments->where('currency', $currency)->sum('currency_total'),
+        ]);
 
         $bestSellers = Product::query()
             ->join('sale_items', 'sale_items.product_id', '=', 'products.id')
@@ -154,6 +158,7 @@ class BusinessReports extends Page
             'dailyItemSales' => $this->dailySalesDate ? $this->dailyItemSales($branch, $this->dailySalesDate) : collect(),
             'dailyTransactions' => $this->dailySalesDate ? $this->dailyTransactions($branch, $this->dailySalesDate) : collect(),
             'payments' => $payments,
+            'paymentCollections' => $paymentCollections,
             'bestSellers' => $bestSellers,
             'lowStock' => $this->lowStock($branch),
         ];
@@ -219,13 +224,27 @@ class BusinessReports extends Page
             ->selectRaw('return_date, COALESCE(SUM(grand_total), 0) as returns_total')
             ->groupBy('return_date')
             ->pluck('returns_total', 'return_date');
+        $paymentCollectionsByDate = SalePayment::query()
+            ->join('sales', 'sales.id', '=', 'sale_payments.sale_id')
+            ->where('sales.company_id', $branch->company_id)
+            ->where('sales.branch_id', $branch->id)
+            ->whereIn('sales.status', $this->saleStatuses())
+            ->whereBetween('sales.sale_date', [$this->dateFrom, $this->dateTo])
+            ->selectRaw('sales.sale_date, sale_payments.currency, COALESCE(SUM(COALESCE(sale_payments.currency_amount, sale_payments.amount)), 0) as currency_total')
+            ->groupBy('sales.sale_date', 'sale_payments.currency')
+            ->get()
+            ->groupBy(fn (object $payment): string => $payment->sale_date instanceof \DateTimeInterface ? $payment->sale_date->toDateString() : (string) $payment->sale_date)
+            ->map(fn (Collection $payments): array => $payments->mapWithKeys(fn (object $payment): array => [
+                $payment->currency => (float) $payment->currency_total,
+            ])->all());
+        $paymentCurrencies = $this->paymentCurrencies($branch);
 
         return $this->salesQuery($branch)
             ->selectRaw('sale_date, COUNT(*) as transactions, COALESCE(SUM(grand_total), 0) as sales_total, COALESCE(SUM(paid_total), 0) as paid_total')
             ->groupBy('sale_date')
             ->orderByDesc('sale_date')
             ->get()
-            ->map(function (Sale $sale) use ($returnsByDate): array {
+            ->map(function (Sale $sale) use ($returnsByDate, $paymentCollectionsByDate, $paymentCurrencies): array {
                 $saleDate = $sale->sale_date->toDateString();
                 $salesTotal = (float) $sale->sales_total;
                 $returnsTotal = (float) ($returnsByDate->get($saleDate) ?? 0);
@@ -237,8 +256,21 @@ class BusinessReports extends Page
                     'returns_total' => $returnsTotal,
                     'net_sales' => $salesTotal - $returnsTotal,
                     'paid_total' => (float) $sale->paid_total,
+                    'payment_collections' => $paymentCurrencies->mapWithKeys(fn (string $currency): array => [
+                        $currency => (float) (($paymentCollectionsByDate->get($saleDate) ?? [])[$currency] ?? 0),
+                    ])->all(),
                 ];
             });
+    }
+
+    /** @return Collection<int, string> */
+    private function paymentCurrencies(Branch $branch): Collection
+    {
+        return collect([$branch->currency, $branch->secondary_currency])
+            ->filter()
+            ->map(fn (string $currency): string => strtoupper($currency))
+            ->unique()
+            ->values();
     }
 
     /** @return Collection<int, array{product_name: string, sku: string, quantity_sold: float, quantity_returned: float, net_quantity: float, sales_total: float, returns_total: float, net_sales: float}> */
@@ -306,7 +338,7 @@ class BusinessReports extends Page
             ->with([
                 'customer:id,name',
                 'creator:id,name',
-                'payments:id,sale_id,payment_method',
+                'payments:id,sale_id,payment_method,currency,currency_amount,amount',
             ])
             ->where('company_id', $branch->company_id)
             ->where('branch_id', $branch->id)
@@ -345,6 +377,10 @@ class BusinessReports extends Page
                     ->unique()
                     ->map(fn (string $method): string => ucwords(str_replace('_', ' ', $method)))
                     ->implode(', ') ?: '—',
+                'payment_collections' => $sale->payments
+                    ->groupBy('currency')
+                    ->map(fn (Collection $payments, string $currency): string => $currency.' '.number_format((float) $payments->sum(fn (SalePayment $payment): float => (float) ($payment->currency_amount ?? $payment->amount)), 2))
+                    ->implode(' · ') ?: '—',
             ]);
     }
 

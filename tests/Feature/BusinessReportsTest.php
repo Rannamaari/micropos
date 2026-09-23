@@ -32,6 +32,10 @@ class BusinessReportsTest extends TestCase
     public function an_admin_can_view_branch_scoped_business_reports(): void
     {
         $warehouse = Warehouse::factory()->create();
+        $warehouse->branch->update([
+            'secondary_currency' => 'USD',
+            'secondary_currency_rate' => 0.0649,
+        ]);
         $admin = User::factory()->forWarehouse($warehouse)->create();
         $admin->assignRole(Role::findByName('admin'));
         $product = Product::factory()->create([
@@ -67,6 +71,9 @@ class BusinessReportsTest extends TestCase
             'sale_id' => $sale->id,
             'payment_method' => 'cash',
             'amount' => 10,
+            'currency' => 'USD',
+            'exchange_rate' => 0.0649,
+            'currency_amount' => 0.649,
         ]);
         Sale::factory()->create([
             'company_id' => $warehouse->company_id,
@@ -80,22 +87,31 @@ class BusinessReportsTest extends TestCase
             'balance_due' => 0,
         ]);
 
-        $this->actingAs($admin)
-            ->get('/admin/business-reports')
+        $response = $this->actingAs($admin)
+            ->get('/admin/business-reports');
+
+        $response
             ->assertOk()
             ->assertSee('Business Reports')
             ->assertSee('Report Cola')
             ->assertSee('Tender Mix')
+            ->assertSee('Collected · MVR')
+            ->assertSee('Collected · USD')
             ->assertSee('Daily Sales')
             ->assertSee(today()->subDay()->format('M d, Y'))
             ->assertSee('13.00');
 
-        Livewire::actingAs($admin)
+        $component = Livewire::actingAs($admin)
             ->test(BusinessReports::class)
+            ->assertSet('branchId', $warehouse->branch_id)
+            ->assertSee('Collected · USD');
+
+        $component
             ->call('selectDailySalesDate', today()->toDateString())
             ->assertSee('Daily Item Sales Summary')
             ->assertSee('Daily Transaction Details')
             ->assertSee('Payment Method')
+            ->assertSee('Collections Received')
             ->assertSee('Report Cola')
             ->assertSee('REPORT-COLA')
             ->assertSee($sale->sale_number)
